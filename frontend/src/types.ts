@@ -17,3 +17,13 @@ export interface ScheduleResponse {
 }
 
 export type PoolFilter = "all" | "25m" | "50m";
+
+export interface SwimRecord {
+  id: number;
+  character: string;
+  poolLength: 25 | 50;
+  lane: number;
+  distanceMeters: number | null;
+  startedAt: string;
+  completedAt: string | null;
+}

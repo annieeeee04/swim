@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+import "./components/PoolView.css";
 import { fetchSchedule, refreshSchedule } from "./api";
+import PoolView from "./components/PoolView";
 import ScheduleView from "./components/ScheduleView";
 import type { PoolFilter, SwimEvent } from "./types";
+
+type Tab = "schedule" | "pool";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -11,6 +15,7 @@ const FILTERS: { value: PoolFilter; label: string }[] = [
 ];
 
 function App() {
+  const [tab, setTab] = useState<Tab>("schedule");
   const [events, setEvents] = useState<SwimEvent[]>([]);
   const [filter, setFilter] = useState<PoolFilter>("all");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -57,30 +62,50 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>🏊 UBC Length Swim Schedule</h1>
-        <button className="refresh-button" onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        {tab === "schedule" && (
+          <button className="refresh-button" onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        )}
       </header>
 
-      {lastUpdated && (
-        <p className="updated-at">Last updated {new Date(lastUpdated).toLocaleString()}</p>
-      )}
-
-      <div className="filters">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            className={`chip ${filter === f.value ? "active" : ""}`}
-            onClick={() => setFilter(f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="tabs">
+        <button
+          className={`tab ${tab === "schedule" ? "active" : ""}`}
+          onClick={() => setTab("schedule")}
+        >
+          Schedule
+        </button>
+        <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
+          Pool
+        </button>
       </div>
 
-      {loading && <p className="empty-state">Loading schedule…</p>}
-      {error && <p className="error-state">⚠️ {error}</p>}
-      {!loading && !error && <ScheduleView events={events} filter={filter} />}
+      {tab === "schedule" && (
+        <>
+          {lastUpdated && (
+            <p className="updated-at">Last updated {new Date(lastUpdated).toLocaleString()}</p>
+          )}
+
+          <div className="filters">
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                className={`chip ${filter === f.value ? "active" : ""}`}
+                onClick={() => setFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {loading && <p className="empty-state">Loading schedule…</p>}
+          {error && <p className="error-state">⚠️ {error}</p>}
+          {!loading && !error && <ScheduleView events={events} filter={filter} />}
+        </>
+      )}
+
+      {tab === "pool" && <PoolView />}
     </div>
   );
 }
