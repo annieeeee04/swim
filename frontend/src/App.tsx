@@ -105,7 +105,7 @@ function App() {
         </>
       )}
 
-      {tab === "pool" && <PoolView />}
+      {tab === "pool" && <PoolView events={events} />}
     </div>
   );
 }

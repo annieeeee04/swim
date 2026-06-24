@@ -38,6 +38,55 @@
   background: #eef6f9;
 }
 
+.slot-days {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.slot-day-heading {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f6e94;
+  border-bottom: 2px solid #d7ecf3;
+  padding-bottom: 4px;
+  margin: 0 0 8px;
+}
+
+.slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slot-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e1ecf1;
+  background: #fff;
+  border-radius: 9px;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  color: #16323f;
+  cursor: pointer;
+}
+
+.slot-button:hover {
+  border-color: #2596be;
+  background: #eef6f9;
+}
+
+.slot-lengths {
+  font-size: 11px;
+  font-weight: 600;
+  background: #eef6f9;
+  color: #0f6e94;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
 .length-choices {
   display: flex;
   gap: 10px;

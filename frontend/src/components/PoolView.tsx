@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CHARACTERS, type Character } from "../data/characters";
 import { finishSwim, startSwim } from "../api";
-import type { SwimRecord } from "../types";
+import type { SwimEvent, SwimRecord } from "../types";
+import { formatDayHeading, formatTime } from "../utils/time";
 import PoolScene from "./PoolScene";
 import SwimmerAvatar, { type SwimmerPose } from "./SwimmerAvatar";
 
 type Stage =
   | "character"
+  | "slot"
   | "length"
   | "arriving"
   | "poolside"
@@ -14,6 +16,12 @@ type Stage =
   | "climbing"
   | "distance"
   | "summary";
+
+interface Slot {
+  start: string;
+  end: string;
+  lengths: (25 | 50)[];
+}
 
 const DECK_Y = 32; // px, center of the deck strip
 const LANE_ROW_HEIGHT = 36; // px, must match .lane height in PoolView.css
@@ -28,14 +36,50 @@ function laneWaterY(lane: number): number {
   return DECK_HEIGHT + (lane - 1) * LANE_ROW_HEIGHT + LANE_ROW_HEIGHT / 2;
 }
 
-export default function PoolView() {
+/** Groups the schedule into unique time slots (start–end), noting which pool
+ *  length(s) are actually offered at each one — some slots only run a 25m
+ *  session, others run 25m and 50m side by side. */
+function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
+  const slotMap = new Map<string, Slot>();
+  for (const ev of events) {
+    const key = `${ev.start}|${ev.end}`;
+    const length: 25 | 50 = ev.title.toLowerCase().includes("50m") ? 50 : 25;
+    const existing = slotMap.get(key);
+    if (existing) {
+      if (!existing.lengths.includes(length)) existing.lengths.push(length);
+    } else {
+      slotMap.set(key, { start: ev.start, end: ev.end, lengths: [length] });
+    }
+  }
+
+  const dayMap = new Map<string, Slot[]>();
+  for (const slot of slotMap.values()) {
+    slot.lengths.sort((a, b) => a - b);
+    const dayKey = slot.start.slice(0, 10);
+    const existing = dayMap.get(dayKey);
+    if (existing) {
+      existing.push(slot);
+    } else {
+      dayMap.set(dayKey, [slot]);
+    }
+  }
+
+  return Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dayKey, slots]) => [dayKey, [...slots].sort((a, b) => a.start.localeCompare(b.start))]);
+}
+
+export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [stage, setStage] = useState<Stage>("character");
   const [character, setCharacter] = useState<Character | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [record, setRecord] = useState<SwimRecord | null>(null);
   const [finishedRecord, setFinishedRecord] = useState<SwimRecord | null>(null);
   const [distanceInput, setDistanceInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
 
   // Once we've "arrived" at the pool deck (centered), walk over to the assigned lane.
   useEffect(() => {
@@ -50,6 +94,12 @@ export default function PoolView() {
     const t = setTimeout(() => setStage("distance"), CLIMB_MS);
     return () => clearTimeout(t);
   }, [stage]);
+
+  function handlePickSlot(slot: Slot) {
+    setSelectedSlot(slot);
+    setError(null);
+    setStage("length");
+  }
 
   async function handlePickLength(poolLength: 25 | 50) {
     if (!character) return;
@@ -89,6 +139,7 @@ export default function PoolView() {
   function reset() {
     setStage("character");
     setCharacter(null);
+    setSelectedSlot(null);
     setRecord(null);
     setFinishedRecord(null);
     setDistanceInput("");
@@ -113,7 +164,7 @@ export default function PoolView() {
                 className="character-card"
                 onClick={() => {
                   setCharacter(c);
-                  setStage("length");
+                  setStage("slot");
                 }}
               >
                 <SwimmerAvatar character={c} pose="stand" size={48} />
@@ -124,28 +175,74 @@ export default function PoolView() {
         </div>
       )}
 
-      {stage === "length" && character && (
+      {stage === "slot" && character && (
         <div className="picker-step">
           <h2>
             <SwimmerAvatar character={character} pose="stand" size={32} />
-            How far is the pool today?
+            When are you swimming, {character.name}?
+          </h2>
+          {slotsByDay.length === 0 ? (
+            <p className="empty-state">No upcoming Length Swim sessions found in the schedule.</p>
+          ) : (
+            <div className="slot-days">
+              {slotsByDay.map(([dayKey, slots]) => (
+                <section key={dayKey} className="slot-day-group">
+                  <h3 className="slot-day-heading">{formatDayHeading(dayKey)}</h3>
+                  <div className="slot-list">
+                    {slots.map((slot) => (
+                      <button
+                        key={`${slot.start}|${slot.end}`}
+                        className="slot-button"
+                        onClick={() => handlePickSlot(slot)}
+                      >
+                        <span>
+                          {formatTime(slot.start)}–{formatTime(slot.end)}
+                        </span>
+                        <span className="slot-lengths">
+                          {slot.lengths.map((l) => `${l}m`).join(" / ")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {stage === "length" && character && selectedSlot && (
+        <div className="picker-step">
+          <h2>
+            <SwimmerAvatar character={character} pose="stand" size={32} />
+            {formatTime(selectedSlot.start)}–{formatTime(selectedSlot.end)} — pick your pool
           </h2>
           <div className="length-choices">
-            <button className="length-button" disabled={busy} onClick={() => handlePickLength(25)}>
-              25m pool
-            </button>
-            <button className="length-button" disabled={busy} onClick={() => handlePickLength(50)}>
-              50m pool
-            </button>
+            {selectedSlot.lengths.includes(25) && (
+              <button className="length-button" disabled={busy} onClick={() => handlePickLength(25)}>
+                25m pool
+              </button>
+            )}
+            {selectedSlot.lengths.includes(50) && (
+              <button className="length-button" disabled={busy} onClick={() => handlePickLength(50)}>
+                50m pool
+              </button>
+            )}
           </div>
           {error && <p className="pool-error">{error}</p>}
         </div>
       )}
 
-      {stage !== "character" && stage !== "length" && character && record && (
+      {stage !== "character" && stage !== "slot" && stage !== "length" && character && record && (
         <div className="pool-stage-wrap">
           <p className="pool-meta">
             {character.name} · Lane {record.lane} · {record.poolLength}m pool
+            {selectedSlot && (
+              <>
+                {" "}
+                · {formatTime(selectedSlot.start)}–{formatTime(selectedSlot.end)}
+              </>
+            )}
           </p>
           <div className="pool-stage">
             <PoolScene activeLane={record.lane} />

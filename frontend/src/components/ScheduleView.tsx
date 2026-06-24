@@ -1,12 +1,7 @@
 import { useMemo } from "react";
 import type { PoolFilter, SwimEvent } from "../types";
+import { formatDayHeading } from "../utils/time";
 import SessionRow from "./SessionRow";
-
-function formatDayHeading(dayKey: string): string {
-  const [year, month, day] = dayKey.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-}
 
 export default function ScheduleView({
   events,
