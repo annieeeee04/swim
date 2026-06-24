@@ -1,12 +1,14 @@
 package com.annie.swim.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * One drop-in swim session as returned by the UBC recreation pm-feed API.
- * Field names match the feed's JSON keys exactly so Jackson can bind
- * straight off the wire with no manual mapping.
+ * @JsonAlias accepts the feed's lowercase wire keys (servicename, facilityname,
+ * facilitytype) on the way in; @JsonProperty controls the camelCase keys we
+ * actually serialize back out to the frontend.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SwimEvent {
@@ -17,13 +19,16 @@ public class SwimEvent {
     @JsonProperty("title")
     private String title;
 
-    @JsonProperty("servicename")
+    @JsonProperty("serviceName")
+    @JsonAlias("servicename")
     private String serviceName;
 
-    @JsonProperty("facilityname")
+    @JsonProperty("facilityName")
+    @JsonAlias("facilityname")
     private String facilityName;
 
-    @JsonProperty("facilitytype")
+    @JsonProperty("facilityType")
+    @JsonAlias("facilitytype")
     private String facilityType;
 
     @JsonProperty("start")
