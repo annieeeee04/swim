@@ -1,0 +1,21 @@
+# Backend (Maven)
+backend/target/
+*.class
+
+# Frontend (Vite/Node)
+frontend/node_modules/
+frontend/dist/
+frontend/dist2/
+frontend/dist-ssr/
+*.local
+
+# Env files
+.env
+*.env.local
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.iml
