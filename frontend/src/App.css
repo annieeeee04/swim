@@ -1,7 +1,7 @@
 .app {
   max-width: 880px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: 28px 20px 60px;
 }
 
 .app-header {
@@ -11,25 +11,37 @@
   gap: 12px;
 }
 
-.app-header h1 {
-  font-size: 22px;
+.brand h1 {
+  font-size: 23px;
   margin: 0;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.tagline {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-pink);
 }
 
 .refresh-button {
-  border: 1px solid #c9dbe4;
+  border: 1.5px solid #f0d4ec;
   background: #fff;
-  color: #0f6e94;
-  padding: 7px 16px;
-  border-radius: 999px;
+  color: var(--color-accent-dark);
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--shadow-card);
 }
 
 .refresh-button:hover:not(:disabled) {
-  border-color: #2596be;
-  background: #eef6f9;
+  border-color: var(--color-accent);
+  background: #fbf3fd;
 }
 
 .refresh-button:disabled {
@@ -39,34 +51,40 @@
 
 .tabs {
   display: flex;
-  gap: 6px;
-  margin: 14px 0 18px;
-  border-bottom: 1px solid #e1ecf1;
+  gap: 4px;
+  margin: 20px 0 18px;
+  background: #fff;
+  border-radius: var(--radius-pill);
+  padding: 5px;
+  box-shadow: var(--shadow-card);
+  width: fit-content;
 }
 
 .tab {
   border: none;
   background: none;
-  padding: 8px 14px;
+  padding: 9px 22px;
   font-size: 13.5px;
-  font-weight: 600;
-  color: #5b7a8a;
+  font-weight: 700;
+  color: var(--color-muted);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .tab:hover {
-  color: #0f6e94;
+  color: var(--color-accent-dark);
 }
 
 .tab.active {
-  color: #0f6e94;
-  border-bottom-color: #2596be;
+  color: #fff;
+  background: var(--grad-primary);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35);
 }
 
 .updated-at {
   font-size: 12.5px;
-  color: #5b7a8a;
+  color: var(--color-muted);
   margin: 4px 0 16px;
 }
 
@@ -78,23 +96,25 @@
 }
 
 .chip {
-  border: 1px solid #c9dbe4;
+  border: 1.5px solid #f0d4ec;
   background: #fff;
-  color: #16323f;
-  padding: 6px 13px;
-  border-radius: 999px;
+  color: var(--color-ink);
+  padding: 7px 15px;
+  border-radius: var(--radius-pill);
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .chip:hover {
-  border-color: #2596be;
+  border-color: var(--color-accent);
 }
 
 .chip.active {
-  background: #2596be;
-  border-color: #2596be;
+  background: var(--grad-primary);
+  border-color: transparent;
   color: #fff;
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
 }
 
 .day-group {
@@ -104,10 +124,10 @@
 .day-heading {
   font-size: 14.5px;
   font-weight: 700;
-  color: #0f6e94;
-  border-bottom: 2px solid #d7ecf3;
-  padding-bottom: 4px;
-  margin: 0 0 10px;
+  color: var(--color-accent-dark);
+  border-bottom: 2px solid #f0e3fb;
+  padding-bottom: 6px;
+  margin: 0 0 12px;
 }
 
 .session-list {
@@ -121,12 +141,13 @@
   align-items: center;
   gap: 12px;
   background: #fff;
-  border: 1px solid #e1ecf1;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 7px;
+  border: 1px solid #f3e8fb;
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-bottom: 9px;
   font-size: 13.5px;
   text-align: left;
+  box-shadow: var(--shadow-card);
 }
 
 .session-emoji {
@@ -145,11 +166,12 @@
 }
 
 .session-time {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--color-ink);
 }
 
 .session-pool {
-  color: #5b7a8a;
+  color: var(--color-muted);
   font-size: 12.5px;
 }
 
@@ -160,31 +182,32 @@
 
 .session-length {
   font-size: 11px;
-  font-weight: 600;
-  background: #eef6f9;
-  color: #0f6e94;
-  border-radius: 6px;
-  padding: 2px 7px;
+  font-weight: 700;
+  background: #faf0fe;
+  color: var(--color-accent-dark);
+  border-radius: 8px;
+  padding: 3px 9px;
   flex-shrink: 0;
 }
 
 .session-book {
   font-size: 11.5px;
-  color: #2596be;
+  font-weight: 700;
+  color: var(--color-accent-dark);
   text-decoration: none;
-  border: 1px solid #c9dbe4;
-  border-radius: 6px;
-  padding: 3px 9px;
+  border: 1.5px solid #f0d4ec;
+  border-radius: var(--radius-pill);
+  padding: 4px 11px;
   flex-shrink: 0;
 }
 
 .session-book:hover {
-  background: #eef6f9;
+  background: #fbf3fd;
 }
 
 .empty-state {
   text-align: center;
-  color: #5b7a8a;
+  color: var(--color-muted);
   padding: 40px 0;
   font-size: 14px;
 }
@@ -194,7 +217,7 @@
   color: #b45309;
   background: #fff7ed;
   border: 1px solid #fed7aa;
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 14px;
   font-size: 13.5px;
 }

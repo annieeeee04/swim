@@ -61,10 +61,13 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🏊 UBC Length Swim Schedule</h1>
+        <div className="brand">
+          <h1>🏊 UBC Length Swim</h1>
+          <p className="tagline">Schedule + Pool Tracker</p>
+        </div>
         {tab === "schedule" && (
           <button className="refresh-button" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? "Refreshing…" : "Refresh"}
+            {refreshing ? "Refreshing…" : "↻ Refresh"}
           </button>
         )}
       </header>
