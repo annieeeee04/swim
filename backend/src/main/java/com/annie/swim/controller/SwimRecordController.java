@@ -38,9 +38,19 @@ public class SwimRecordController {
         return repository.findAllByOrderByStartedAtDesc();
     }
 
+    /** Lanes (1-10) currently occupied by a swim that hasn't been completed yet. */
+    @GetMapping("/occupied-lanes")
+    public List<Integer> getOccupiedLanes() {
+        return repository.findByCompletedAtIsNull().stream()
+                .map(SwimRecord::getLane)
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
     /**
      * Starts a new swim: picks a character and a pool length (25 or 50m).
-     * Assigns the first free lane (1-10) and creates the record.
+     * If the request specifies a lane, that lane is used (as long as it's free);
+     * otherwise the first free lane (1-10) is assigned automatically.
      */
     @PostMapping
     public SwimRecord start(@RequestBody StartRequest request) {
@@ -51,7 +61,23 @@ public class SwimRecordController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "poolLength must be 25 or 50");
         }
 
-        int lane = assignLane();
+        Set<Integer> occupied = repository.findByCompletedAtIsNull().stream()
+                .map(SwimRecord::getLane)
+                .collect(Collectors.toSet());
+
+        int lane;
+        if (request.lane() != null) {
+            if (request.lane() < 1 || request.lane() > TOTAL_LANES) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lane must be between 1 and " + TOTAL_LANES);
+            }
+            if (occupied.contains(request.lane())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "lane " + request.lane() + " is already occupied");
+            }
+            lane = request.lane();
+        } else {
+            lane = assignLane(occupied);
+        }
+
         SwimRecord record = new SwimRecord(request.character(), request.poolLength(), lane);
         return repository.save(record);
     }
@@ -80,11 +106,7 @@ public class SwimRecordController {
     }
 
     /** Picks a free lane out of 1-10; if every lane is occupied, picks a random one anyway. */
-    private int assignLane() {
-        Set<Integer> occupied = repository.findByCompletedAtIsNull().stream()
-                .map(SwimRecord::getLane)
-                .collect(Collectors.toSet());
-
+    private int assignLane(Set<Integer> occupied) {
         List<Integer> free = new ArrayList<>();
         for (int lane = 1; lane <= TOTAL_LANES; lane++) {
             if (!occupied.contains(lane)) {
@@ -98,7 +120,7 @@ public class SwimRecordController {
         return free.get(ThreadLocalRandom.current().nextInt(free.size()));
     }
 
-    public record StartRequest(String character, int poolLength) {
+    public record StartRequest(String character, int poolLength, Integer lane) {
     }
 
     public record FinishRequest(Double distanceMeters) {

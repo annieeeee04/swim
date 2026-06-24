@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CHARACTERS, type Character } from "../data/characters";
-import { finishSwim, startSwim } from "../api";
+import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
 import type { SwimEvent, SwimRecord } from "../types";
 import { formatDayHeading, formatTime } from "../utils/time";
 import PoolScene from "./PoolScene";
@@ -10,6 +10,7 @@ type Stage =
   | "character"
   | "slot"
   | "length"
+  | "lane"
   | "arriving"
   | "poolside"
   | "swimming"
@@ -23,9 +24,9 @@ interface Slot {
   lengths: (25 | 50)[];
 }
 
-const DECK_Y = 32; // px, center of the deck strip
-const LANE_ROW_HEIGHT = 36; // px, must match .lane height in PoolView.css
-const DECK_HEIGHT = 64; // px, must match .pool-deck height in PoolView.css
+const DECK_Y = 45; // px, center of the deck strip
+const LANE_ROW_HEIGHT = 52; // px, must match .lane height in PoolView.css
+const DECK_HEIGHT = 90; // px, must match .pool-deck height in PoolView.css
 const CLIMB_MS = 800;
 
 function laneCenterXPercent(lane: number): number {
@@ -73,6 +74,8 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [stage, setStage] = useState<Stage>("character");
   const [character, setCharacter] = useState<Character | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [poolLength, setPoolLength] = useState<25 | 50 | null>(null);
+  const [occupiedLanes, setOccupiedLanes] = useState<number[]>([]);
   const [record, setRecord] = useState<SwimRecord | null>(null);
   const [finishedRecord, setFinishedRecord] = useState<SwimRecord | null>(null);
   const [distanceInput, setDistanceInput] = useState("");
@@ -80,6 +83,22 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [error, setError] = useState<string | null>(null);
 
   const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
+
+  // Entering the lane-picking stage: find out which lanes are already taken.
+  useEffect(() => {
+    if (stage !== "lane") return;
+    let cancelled = false;
+    fetchOccupiedLanes()
+      .then((lanes) => {
+        if (!cancelled) setOccupiedLanes(lanes);
+      })
+      .catch(() => {
+        if (!cancelled) setOccupiedLanes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stage]);
 
   // Once we've "arrived" at the pool deck (centered), walk over to the assigned lane.
   useEffect(() => {
@@ -101,16 +120,24 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
     setStage("length");
   }
 
-  async function handlePickLength(poolLength: 25 | 50) {
-    if (!character) return;
+  function handlePickLength(length: 25 | 50) {
+    setPoolLength(length);
+    setError(null);
+    setStage("lane");
+  }
+
+  async function handlePickLane(lane: number) {
+    if (!character || !poolLength) return;
     setBusy(true);
     setError(null);
     try {
-      const rec = await startSwim(character.id, poolLength);
+      const rec = await startSwim(character.id, poolLength, lane);
       setRecord(rec);
       setStage("arriving");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't start the swim.");
+      // Someone may have just taken it — refresh the occupied list.
+      fetchOccupiedLanes().then(setOccupiedLanes).catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -140,6 +167,8 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
     setStage("character");
     setCharacter(null);
     setSelectedSlot(null);
+    setPoolLength(null);
+    setOccupiedLanes([]);
     setRecord(null);
     setFinishedRecord(null);
     setDistanceInput("");
@@ -219,103 +248,134 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
           </h2>
           <div className="length-choices">
             {selectedSlot.lengths.includes(25) && (
-              <button className="length-button" disabled={busy} onClick={() => handlePickLength(25)}>
+              <button className="length-button" onClick={() => handlePickLength(25)}>
                 25m pool
               </button>
             )}
             {selectedSlot.lengths.includes(50) && (
-              <button className="length-button" disabled={busy} onClick={() => handlePickLength(50)}>
+              <button className="length-button" onClick={() => handlePickLength(50)}>
                 50m pool
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {stage === "lane" && character && (
+        <div className="picker-step">
+          <h2>
+            <SwimmerAvatar character={character} pose="stand" size={32} />
+            Pick your lane, {character.name}!
+          </h2>
+          <p className="pool-meta">Tap an open lane below.</p>
+          <div className="pool-stage pool-stage-big">
+            <PoolScene activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
           </div>
           {error && <p className="pool-error">{error}</p>}
         </div>
       )}
 
-      {stage !== "character" && stage !== "slot" && stage !== "length" && character && record && (
-        <div className="pool-stage-wrap">
-          <p className="pool-meta">
-            {character.name} · Lane {record.lane} · {record.poolLength}m pool
-            {selectedSlot && (
-              <>
-                {" "}
-                · {formatTime(selectedSlot.start)}–{formatTime(selectedSlot.end)}
-              </>
-            )}
-          </p>
-          <div className="pool-stage">
-            <PoolScene activeLane={record.lane} />
-            {showAvatar && (
-              <div
-                className="avatar-wrapper"
-                style={{ left: `${xPercent}%`, top: `${yPx}px` }}
-              >
-                <div className={`avatar-inner ${bobbing ? "avatar-bob" : ""}`}>
-                  <SwimmerAvatar character={character} pose={pose} size={40} />
+      {stage !== "character" &&
+        stage !== "slot" &&
+        stage !== "length" &&
+        stage !== "lane" &&
+        character &&
+        record && (
+          <div className="pool-stage-wrap">
+            <p className="pool-meta">
+              {character.name} · Lane {record.lane} · {record.poolLength}m pool
+              {selectedSlot && (
+                <>
+                  {" "}
+                  · {formatTime(selectedSlot.start)}–{formatTime(selectedSlot.end)}
+                </>
+              )}
+            </p>
+            <div className="pool-stage pool-stage-big">
+              <PoolScene activeLane={record.lane} />
+              {showAvatar && (
+                <div className="avatar-wrapper" style={{ left: `${xPercent}%`, top: `${yPx}px` }}>
+                  <div className={`avatar-inner ${bobbing ? "avatar-bob" : ""}`}>
+                    <SwimmerAvatar character={character} pose={pose} size={48} />
+                  </div>
                 </div>
+              )}
+              {stage === "swimming" && (
+                // Keyed by record id so the splash animation plays once (and
+                // stays invisible afterwards via animation-fill-mode) each
+                // time this swimmer jumps in, without needing extra state.
+                <div
+                  key={`splash-${record.id}`}
+                  className="splash-wrapper"
+                  style={{ left: `${xPercent}%`, top: `${laneWaterY(record.lane)}px` }}
+                >
+                  <span className="splash-ring" />
+                  <span className="splash-ring splash-ring-delay" />
+                  <span className="splash-drop splash-drop-1">💦</span>
+                  <span className="splash-drop splash-drop-2">💦</span>
+                  <span className="splash-drop splash-drop-3">💦</span>
+                </div>
+              )}
+            </div>
+
+            {stage === "poolside" && (
+              <button className="length-button" onClick={() => setStage("swimming")}>
+                Start swim! 🏁
+              </button>
+            )}
+
+            {stage === "swimming" && (
+              <button className="length-button" onClick={() => setStage("climbing")}>
+                Done swimming 🏁
+              </button>
+            )}
+
+            {stage === "climbing" && <p className="pool-meta">Climbing out…</p>}
+
+            {stage === "distance" && (
+              <form
+                className="distance-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleFinish();
+                }}
+              >
+                <label htmlFor="distance">How far did you actually swim (meters)?</label>
+                <div className="distance-row">
+                  <input
+                    id="distance"
+                    type="number"
+                    min="0"
+                    step="25"
+                    inputMode="decimal"
+                    value={distanceInput}
+                    onChange={(e) => setDistanceInput(e.target.value)}
+                    placeholder="e.g. 800"
+                    disabled={busy}
+                    autoFocus
+                  />
+                  <button type="submit" className="length-button" disabled={busy}>
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                {error && <p className="pool-error">{error}</p>}
+              </form>
+            )}
+
+            {stage === "summary" && finishedRecord && (
+              <div className="summary-card">
+                <p>
+                  🎉 Nice swim, {character.name}! You swam{" "}
+                  <strong>{finishedRecord.distanceMeters}m</strong> in Lane {finishedRecord.lane} (
+                  {finishedRecord.poolLength}m pool).
+                </p>
+                <button className="length-button" onClick={reset}>
+                  Swim again
+                </button>
               </div>
             )}
           </div>
-
-          {stage === "poolside" && (
-            <button className="length-button" onClick={() => setStage("swimming")}>
-              Start swim! 🏁
-            </button>
-          )}
-
-          {stage === "swimming" && (
-            <button className="length-button" onClick={() => setStage("climbing")}>
-              Done swimming 🏁
-            </button>
-          )}
-
-          {stage === "climbing" && <p className="pool-meta">Climbing out…</p>}
-
-          {stage === "distance" && (
-            <form
-              className="distance-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleFinish();
-              }}
-            >
-              <label htmlFor="distance">How far did you actually swim (meters)?</label>
-              <div className="distance-row">
-                <input
-                  id="distance"
-                  type="number"
-                  min="0"
-                  step="25"
-                  inputMode="decimal"
-                  value={distanceInput}
-                  onChange={(e) => setDistanceInput(e.target.value)}
-                  placeholder="e.g. 800"
-                  disabled={busy}
-                  autoFocus
-                />
-                <button type="submit" className="length-button" disabled={busy}>
-                  {busy ? "Saving…" : "Save"}
-                </button>
-              </div>
-              {error && <p className="pool-error">{error}</p>}
-            </form>
-          )}
-
-          {stage === "summary" && finishedRecord && (
-            <div className="summary-card">
-              <p>
-                🎉 Nice swim, {character.name}! You swam{" "}
-                <strong>{finishedRecord.distanceMeters}m</strong> in Lane {finishedRecord.lane} (
-                {finishedRecord.poolLength}m pool).
-              </p>
-              <button className="length-button" onClick={reset}>
-                Swim again
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
     </div>
   );
 }
