@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import "./components/PoolView.css";
+import "./components/RecordsView.css";
 import { fetchSchedule, refreshSchedule } from "./api";
 import PoolView from "./components/PoolView";
 import ScheduleView from "./components/ScheduleView";
+import RecordsView from "./components/RecordsView";
 import type { PoolFilter, SwimEvent } from "./types";
 
-type Tab = "schedule" | "pool";
+type Tab = "schedule" | "pool" | "records";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -82,6 +84,12 @@ function App() {
         <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
           Pool
         </button>
+        <button
+          className={`tab ${tab === "records" ? "active" : ""}`}
+          onClick={() => setTab("records")}
+        >
+          My Records
+        </button>
       </div>
 
       {tab === "schedule" && (
@@ -109,6 +117,8 @@ function App() {
       )}
 
       {tab === "pool" && <PoolView events={events} />}
+
+      {tab === "records" && <RecordsView />}
     </div>
   );
 }
