@@ -6,6 +6,7 @@ import { fetchSchedule, refreshSchedule } from "./api";
 import PoolView from "./components/PoolView";
 import ScheduleView from "./components/ScheduleView";
 import RecordsView from "./components/RecordsView";
+import FluidCursor from "./components/FluidCursor";
 import type { PoolFilter, SwimEvent } from "./types";
 
 type Tab = "schedule" | "pool" | "records";
@@ -62,19 +63,25 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
+      <FluidCursor />
+      <header className="app-header glass-surface" data-glass>
         <div className="brand">
           <h1>🏊 UBC Length Swim</h1>
           <p className="tagline">Schedule + Pool Tracker</p>
         </div>
         {tab === "schedule" && (
-          <button className="refresh-button" onClick={handleRefresh} disabled={refreshing}>
+          <button
+            className="refresh-button glass-surface"
+            data-glass
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
             {refreshing ? "Refreshing…" : "↻ Refresh"}
           </button>
         )}
       </header>
 
-      <div className="tabs">
+      <div className="tabs glass-surface" data-glass>
         <button
           className={`tab ${tab === "schedule" ? "active" : ""}`}
           onClick={() => setTab("schedule")}
@@ -102,7 +109,8 @@ function App() {
             {FILTERS.map((f) => (
               <button
                 key={f.value}
-                className={`chip ${filter === f.value ? "active" : ""}`}
+                className={`chip glass-surface ${filter === f.value ? "active" : ""}`}
+                data-glass
                 onClick={() => setFilter(f.value)}
               >
                 {f.label}

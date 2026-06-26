@@ -88,7 +88,7 @@ export default function RecordsView() {
       <div className="records-blob records-blob-b" aria-hidden="true" />
       <div className="records-blob records-blob-c" aria-hidden="true" />
 
-      <div className="records-hero glass-panel">
+      <div className="records-hero glass-panel" data-glass>
         <p className="records-eyebrow">Your Lane, Your Legacy</p>
         <h2 className="records-title">Swim Records</h2>
         <p className="records-subtitle">Every lap, every lane, tracked and stacked.</p>
@@ -100,19 +100,19 @@ export default function RecordsView() {
       {!loading && !error && (
         <>
           <div className="records-stats">
-            <div className="stat-card glass-panel">
+            <div className="stat-card glass-panel" data-glass>
               <span className="stat-value">{stats.totalSwims}</span>
               <span className="stat-label">Total Swims</span>
             </div>
-            <div className="stat-card glass-panel">
+            <div className="stat-card glass-panel" data-glass>
               <span className="stat-value">{stats.totalDistance}m</span>
               <span className="stat-label">Distance Logged</span>
             </div>
-            <div className="stat-card glass-panel">
+            <div className="stat-card glass-panel" data-glass>
               <span className="stat-value">{stats.longest?.distanceMeters ?? "—"}m</span>
               <span className="stat-label">Longest Swim</span>
             </div>
-            <div className="stat-card glass-panel stat-card-favorite">
+            <div className="stat-card glass-panel stat-card-favorite" data-glass>
               {stats.favorite ? (
                 <>
                   <SwimmerAvatar character={stats.favorite} pose="stand" size={34} />
@@ -134,7 +134,7 @@ export default function RecordsView() {
                 const character = characterFor(r.character);
                 const done = r.completedAt != null;
                 return (
-                  <div key={r.id} className="record-card glass-panel">
+                  <div key={r.id} className="record-card glass-panel" data-glass>
                     <div className="record-card-top">
                       <SwimmerAvatar character={character} pose="stand" size={40} />
                       <span className={`record-status ${done ? "record-status-done" : "record-status-live"}`}>
