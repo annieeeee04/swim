@@ -4,7 +4,7 @@
   color: #2c2350;
 
   --grad-primary: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
-  --grad-bg: linear-gradient(160deg, #fdf2f8 0%, #f3eafe 45%, #eef5ff 100%);
+  --grad-bg: linear-gradient(160deg, #fffbea 0%, #fff3c4 45%, #ffe9a3 100%);
   --color-ink: #2c2350;
   --color-muted: #8a83a8;
   --color-accent: #a855f7;
