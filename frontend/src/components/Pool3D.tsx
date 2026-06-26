@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 export type SwimmerPose3D = "stand" | "swim" | "climb";
 
@@ -10,6 +12,10 @@ export interface Swimmer3D {
   cap: string;
   lane: number;
   pose: SwimmerPose3D;
+  /** Path to the real GLTF model (e.g. "/models/woody.glb"). */
+  modelUrl: string;
+  modelScale?: number;
+  modelRotationY?: number;
 }
 
 interface Pool3DProps {
@@ -28,13 +34,53 @@ const WATER_LENGTH = 9;
 const DECK_LENGTH = 3;
 const DECK_HEIGHT = 0.35;
 const WATER_DEPTH = 0.9;
+/** Target standing height (meters) that every loaded character model gets normalized to. */
+const TARGET_HEIGHT = 1.05;
 
-function makeLaneNumberSprite(lane: number): THREE.Sprite {
+// Module-level cache so re-opening the pool (or switching characters) doesn't
+// re-download/re-parse the same GLB more than once per page session.
+const gltfTemplateCache = new Map<string, Promise<THREE.Object3D>>();
+const gltfLoader = new GLTFLoader();
+
+function loadCharacterTemplate(url: string): Promise<THREE.Object3D> {
+  let pending = gltfTemplateCache.get(url);
+  if (!pending) {
+    pending = gltfLoader.loadAsync(url).then((gltf) => {
+      const root = gltf.scene;
+      // Normalize every model to the same standing height & a feet-at-origin
+      // pivot, so Woody/Buzz/Bo Peep (all very different native scales) sit
+      // consistently in the lane regardless of how they were modeled.
+      const box = new THREE.Box3().setFromObject(root);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const height = size.y || 1;
+      const scale = TARGET_HEIGHT / height;
+      root.scale.setScalar(scale);
+
+      const scaledBox = new THREE.Box3().setFromObject(root);
+      root.position.x -= (scaledBox.min.x + scaledBox.max.x) / 2;
+      root.position.z -= (scaledBox.min.z + scaledBox.max.z) / 2;
+      root.position.y -= scaledBox.min.y;
+
+      root.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.castShadow = false;
+          obj.receiveShadow = false;
+        }
+      });
+      return root;
+    });
+    gltfTemplateCache.set(url, pending);
+  }
+  return pending;
+}
+
+function makeLaneNumberSprite(lane: number, color: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
   canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "rgba(168, 85, 247, 0.92)";
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(64, 64, 56, 0, Math.PI * 2);
   ctx.fill();
@@ -51,11 +97,60 @@ function makeLaneNumberSprite(lane: number): THREE.Sprite {
   return sprite;
 }
 
+/** White ceramic deck tiles with light grout lines, generated procedurally
+ *  (no external image) so the deck reads as tiled rather than flat-colored. */
+function makeDeckTileTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#f5f1e8";
+  ctx.fillRect(0, 0, size, size);
+  const tiles = 4;
+  const step = size / tiles;
+  ctx.strokeStyle = "#d8d0bd";
+  ctx.lineWidth = 4;
+  for (let i = 0; i <= tiles; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * step, 0);
+    ctx.lineTo(i * step, size);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * step);
+    ctx.lineTo(size, i * step);
+    ctx.stroke();
+  }
+  // subtle per-tile shading variation
+  for (let x = 0; x < tiles; x++) {
+    for (let y = 0; y < tiles; y++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.02)";
+      ctx.fillRect(x * step + 2, y * step + 2, step - 4, step - 4);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+/** Lane-rope color, FINA-style banding inspired by the Olympic reference photo:
+ *  outer lanes red, next band blue, innermost lanes yellow. */
+function laneLineColor(dividerIndex: number, lanesCount: number): number {
+  const edgeDistance = Math.min(dividerIndex, lanesCount - dividerIndex);
+  const third = lanesCount / 3;
+  if (edgeDistance < third) return 0xe03131;
+  if (edgeDistance < third * 2) return 0x1c7ed6;
+  return 0xffd43b;
+}
+
 /**
  * A lightweight, dependency-light 3D pool scene built directly on three.js
- * (no react-three-fiber): a 10-lane pool with a deck, orbit camera controls
- * (drag to rotate, wheel/pinch to zoom), and a simple capsule-and-sphere
- * "swimmer" figure that stands on the deck or floats/bobs in its lane.
+ * (no react-three-fiber): a 10-lane Olympic-style pool with a tiled deck,
+ * starting blocks, colored lane lines, orbit camera controls (drag to
+ * rotate, wheel/pinch to zoom), and real GLTF character models standing on
+ * the deck or floating/bobbing in their lane.
  */
 export default function Pool3D({
   lanesCount = 10,
@@ -68,11 +163,9 @@ export default function Pool3D({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lanePlanesRef = useRef<THREE.Mesh[]>([]);
   const swimmerGroupRef = useRef<THREE.Group | null>(null);
-  const swimmerMaterialsRef = useRef<{
-    suit: THREE.MeshStandardMaterial;
-    skin: THREE.MeshStandardMaterial;
-    cap: THREE.MeshStandardMaterial;
-  } | null>(null);
+  const modelHolderRef = useRef<THREE.Group | null>(null);
+  const placeholderRef = useRef<THREE.Group | null>(null);
+  const loadedModelUrlRef = useRef<string | null>(null);
   const stateRef = useRef({
     activeLane,
     occupiedLanes,
@@ -98,16 +191,15 @@ export default function Pool3D({
     const deckCenterX = -DECK_LENGTH / 2;
     const waterCenterX = DECK_LENGTH / 2 + WATER_LENGTH / 2 - 1.4;
     const waterSurfaceY = -WATER_DEPTH * 0.18;
+    const deckEdgeX = deckCenterX + DECK_LENGTH / 2;
 
-    function laneZ(lane: number) {
-      return (lane - 0.5) * LANE_WIDTH - halfWidth;
-    }
+    const laneZ = (lane: number) => (lane - 0.5) * LANE_WIDTH - halfWidth;
 
     const scene = new THREE.Scene();
     scene.background = null;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 9.5, 11.5);
+    camera.position.set(0, 11.5, 12.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -120,31 +212,49 @@ export default function Pool3D({
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.minDistance = 6;
-    controls.maxDistance = 22;
+    controls.maxDistance = 24;
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.update();
 
     // ---------- lighting ----------
-    scene.add(new THREE.AmbientLight(0xfff3e0, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-    sun.position.set(6, 12, 6);
+    scene.add(new THREE.AmbientLight(0xfdf7e8, 0.8));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(6, 14, 6);
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xc7a4ff, 0.35);
+    const fill = new THREE.DirectionalLight(0xbfe0fb, 0.4);
     fill.position.set(-6, 4, -4);
     scene.add(fill);
 
-    // ---------- deck ----------
+    // ---------- deck (white tiled) ----------
+    const deckTexture = makeDeckTileTexture();
+    deckTexture.repeat.set(DECK_LENGTH * 1.3, totalWidth * 1.3);
     const deck = new THREE.Mesh(
       new THREE.BoxGeometry(DECK_LENGTH, DECK_HEIGHT, totalWidth),
-      new THREE.MeshStandardMaterial({ color: 0xfbeaf6, roughness: 0.85 }),
+      new THREE.MeshStandardMaterial({ map: deckTexture, roughness: 0.8 }),
     );
     deck.position.set(deckCenterX, DECK_HEIGHT / 2, 0);
     scene.add(deck);
 
+    // ---------- starting blocks (one per lane, at the deck/water edge) ----------
+    const blockMat = new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.55 });
+    const blockTopMat = new THREE.MeshStandardMaterial({ color: 0x2b6cb0, roughness: 0.6 });
+    for (let lane = 1; lane <= lanesCount; lane++) {
+      const z = laneZ(lane);
+      const block = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.32, LANE_WIDTH - 0.3), blockMat);
+      base.position.set(deckEdgeX - 0.18, DECK_HEIGHT + 0.16, z);
+      block.add(base);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, LANE_WIDTH - 0.4), blockTopMat);
+      top.position.set(deckEdgeX - 0.16, DECK_HEIGHT + 0.34, z);
+      top.rotation.z = -0.06;
+      block.add(top);
+      scene.add(block);
+    }
+
     // ---------- water basin ----------
     const basin = new THREE.Mesh(
       new THREE.BoxGeometry(WATER_LENGTH, WATER_DEPTH, totalWidth),
-      new THREE.MeshStandardMaterial({ color: 0xbfe0fb, roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ color: 0x0b6fb0, roughness: 0.55 }),
     );
     basin.position.set(waterCenterX, -WATER_DEPTH / 2, 0);
     scene.add(basin);
@@ -152,26 +262,37 @@ export default function Pool3D({
     const waterSurface = new THREE.Mesh(
       new THREE.PlaneGeometry(WATER_LENGTH, totalWidth),
       new THREE.MeshStandardMaterial({
-        color: 0x4dabf7,
+        color: 0x18a3e8,
         transparent: true,
-        opacity: 0.55,
-        roughness: 0.15,
-        metalness: 0.1,
+        opacity: 0.62,
+        roughness: 0.1,
+        metalness: 0.15,
       }),
     );
     waterSurface.rotation.x = -Math.PI / 2;
     waterSurface.position.set(waterCenterX, waterSurfaceY, 0);
     scene.add(waterSurface);
 
-    // lane dividers (thin white strips on top of the water, one more than lane count)
+    // lane lines (colored rope-style dividers — red outer, blue mid, yellow center,
+    // matching the Olympic reference photo's banding)
     for (let i = 0; i <= lanesCount; i++) {
       const z = i * LANE_WIDTH - halfWidth;
+      const color = laneLineColor(i, lanesCount);
       const divider = new THREE.Mesh(
-        new THREE.BoxGeometry(WATER_LENGTH + 0.2, 0.04, 0.06),
-        new THREE.MeshStandardMaterial({ color: 0xffffff }),
+        new THREE.BoxGeometry(WATER_LENGTH + 0.2, 0.045, 0.07),
+        new THREE.MeshStandardMaterial({ color }),
       );
       divider.position.set(waterCenterX, waterSurfaceY + 0.03, z);
       scene.add(divider);
+
+      // small floats along the rope for a bit of texture/readability
+      const floatGeo = new THREE.SphereGeometry(0.07, 8, 8);
+      const floatMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+      for (let f = -WATER_LENGTH / 2 + 0.4; f <= WATER_LENGTH / 2 - 0.4; f += 1.1) {
+        const bead = new THREE.Mesh(floatGeo, floatMat);
+        bead.position.set(waterCenterX + f, waterSurfaceY + 0.05, z);
+        scene.add(bead);
+      }
     }
 
     // interactive/highlight plane per lane + number sprite
@@ -188,28 +309,36 @@ export default function Pool3D({
       scene.add(plane);
       lanePlanes.push(plane);
 
-      const sprite = makeLaneNumberSprite(lane);
+      const sprite = makeLaneNumberSprite(lane, "rgba(28, 126, 214, 0.92)");
       sprite.position.set(deckCenterX + DECK_LENGTH / 2 + 0.15, DECK_HEIGHT + 0.4, z);
       scene.add(sprite);
     }
     lanePlanesRef.current = lanePlanes;
 
     // ---------- swimmer figure ----------
-    const suitMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.5 });
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf3c89e, roughness: 0.7 });
-    const capMat = new THREE.MeshStandardMaterial({ color: 0xff8787, roughness: 0.6 });
-    swimmerMaterialsRef.current = { suit: suitMat, skin: skinMat, cap: capMat };
+    // A simple capsule+sphere placeholder shows immediately; it's hidden as
+    // soon as the real GLTF character model finishes loading (loading
+    // happens in a separate effect keyed on swimmer.modelUrl below).
+    const placeholder = new THREE.Group();
+    const placeholderBody = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.28, 0.5, 4, 12),
+      new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.5 }),
+    );
+    placeholder.add(placeholderBody);
+    const placeholderHead = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xf3c89e, roughness: 0.7 }),
+    );
+    placeholderHead.position.y = 0.58;
+    placeholder.add(placeholderHead);
+    placeholderRef.current = placeholder;
+
+    const modelHolder = new THREE.Group();
+    modelHolderRef.current = modelHolder;
 
     const swimmerGroup = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.5, 4, 12), suitMat);
-    body.position.y = 0;
-    swimmerGroup.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), skinMat);
-    head.position.y = 0.58;
-    swimmerGroup.add(head);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.23, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), capMat);
-    cap.position.y = 0.6;
-    swimmerGroup.add(cap);
+    swimmerGroup.add(placeholder);
+    swimmerGroup.add(modelHolder);
     swimmerGroup.visible = false;
     scene.add(swimmerGroup);
     swimmerGroupRef.current = swimmerGroup;
@@ -236,7 +365,7 @@ export default function Pool3D({
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
-    function pickLaneAt(clientX: number, clientY: number): number | null {
+    const pickLaneAt = (clientX: number, clientY: number): number | null => {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -244,13 +373,13 @@ export default function Pool3D({
       const hits = raycaster.intersectObjects(lanePlanesRef.current, false);
       if (hits.length === 0) return null;
       return hits[0].object.userData.lane as number;
-    }
+    };
 
     let pointerDownPos: { x: number; y: number } | null = null;
-    function handlePointerDown(e: PointerEvent) {
+    const handlePointerDown = (e: PointerEvent) => {
       pointerDownPos = { x: e.clientX, y: e.clientY };
-    }
-    function handlePointerUp(e: PointerEvent) {
+    };
+    const handlePointerUp = (e: PointerEvent) => {
       if (!stateRef.current.onPickLane) return;
       if (!pointerDownPos) return;
       const dx = e.clientX - pointerDownPos.x;
@@ -262,14 +391,14 @@ export default function Pool3D({
       if (lane === null) return;
       if (stateRef.current.occupiedLanes.includes(lane)) return;
       stateRef.current.onPickLane(lane);
-    }
-    function handlePointerMove(e: PointerEvent) {
+    };
+    const handlePointerMove = (e: PointerEvent) => {
       const lane = pickLaneAt(e.clientX, e.clientY);
       renderer.domElement.style.cursor =
         lane !== null && stateRef.current.onPickLane && !stateRef.current.occupiedLanes.includes(lane)
           ? "pointer"
           : "grab";
-    }
+    };
     renderer.domElement.addEventListener("pointerdown", handlePointerDown);
     renderer.domElement.addEventListener("pointerup", handlePointerUp);
     renderer.domElement.addEventListener("pointermove", handlePointerMove);
@@ -277,7 +406,7 @@ export default function Pool3D({
     // ---------- render loop ----------
     let raf = 0;
     const clock = new THREE.Clock();
-    function tick() {
+    const tick = () => {
       raf = requestAnimationFrame(tick);
       const t = clock.getElapsedTime();
       elapsedRef.current = t;
@@ -338,7 +467,7 @@ export default function Pool3D({
 
       controls.update();
       renderer.render(scene, camera);
-    }
+    };
     tick();
 
     return () => {
@@ -358,18 +487,44 @@ export default function Pool3D({
         }
       });
       container.removeChild(renderer.domElement);
+      loadedModelUrlRef.current = null;
     };
     // Scene is built once per lane-count; everything else flows through stateRef.
   }, [lanesCount]);
 
-  // Update swimmer colors when the character changes.
+  // Load (or swap to) the real GLTF model whenever the active character changes.
   useEffect(() => {
-    const mats = swimmerMaterialsRef.current;
-    if (!mats || !swimmer) return;
-    mats.suit.color.set(swimmer.suit);
-    mats.skin.color.set(swimmer.skin);
-    mats.cap.color.set(swimmer.cap);
-  }, [swimmer?.suit, swimmer?.skin, swimmer?.cap, swimmer]);
+    const url = swimmer?.modelUrl;
+    const holder = modelHolderRef.current;
+    const placeholder = placeholderRef.current;
+    if (!url || !holder || !placeholder) return;
+    if (loadedModelUrlRef.current === url) return;
+
+    let cancelled = false;
+    placeholder.visible = true;
+    loadCharacterTemplate(url)
+      .then((template) => {
+        if (cancelled) return;
+        while (holder.children.length > 0) {
+          holder.remove(holder.children[0]);
+        }
+        const instance = cloneSkeleton(template) as THREE.Object3D;
+        const scale = swimmer?.modelScale ?? 1;
+        instance.scale.multiplyScalar(scale);
+        instance.rotation.y = swimmer?.modelRotationY ?? 0;
+        holder.add(instance);
+        loadedModelUrlRef.current = url;
+        placeholder.visible = false;
+      })
+      .catch(() => {
+        // Keep the placeholder visible if the model fails to load.
+        loadedModelUrlRef.current = null;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [swimmer?.modelUrl, swimmer?.modelScale, swimmer?.modelRotationY]);
 
   // Trigger a splash burst in the swimmer's lane.
   useEffect(() => {

@@ -297,6 +297,9 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                     cap: character.cap,
                     lane: record.lane,
                     pose: pose3d,
+                    modelUrl: character.modelUrl,
+                    modelScale: character.modelScale,
+                    modelRotationY: character.modelRotationY,
                   }}
                   splashTrigger={splashTrigger}
                 />
