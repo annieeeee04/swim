@@ -77,7 +77,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-Runs on `http://localhost:8080` (always — in production this port is never
+Runs on `https://d1q6dtl87ueyeb.cloudfront.net` (always — in production this port is never
 exposed directly to the internet; the CloudFront reverse proxy described
 above is what the browser actually talks to). Endpoints:
 
@@ -110,7 +110,7 @@ npm install
 npm run dev
 ```
 
-Runs on `http://localhost:5173` by default and expects the backend at `http://localhost:8080` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
+Runs on `https://du8yrnvuprbic.cloudfront.net` by default and expects the backend at `https://d1q6dtl87ueyeb.cloudfront.net` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
 
 Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page.
 
@@ -123,7 +123,7 @@ under `backend/data/`):
 docker compose up --build
 ```
 
-Backend at `http://localhost:8080`, frontend at `http://localhost:5173`.
+Backend at `https://d1q6dtl87ueyeb.cloudfront.net`, frontend at `https://du8yrnvuprbic.cloudfront.net`.
 Each app also has its own standalone `Dockerfile` if you only need one.
 
 ## CI/CD
