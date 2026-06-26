@@ -10,10 +10,12 @@ COPY src ./src
 RUN mvn -B package -DskipTests
 
 # --- Run stage ---
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-RUN addgroup -S swim && adduser -S swim -G swim
+RUN apt-get update && apt-get install -y --no-install-recommends wget \
+    && rm -rf /var/lib/apt/lists/*
+RUN groupadd -r swim && useradd -r -g swim swim
 COPY --from=build /app/target/*.jar app.jar
 
 # H2 file database lives here; mount a volume to persist it across container restarts.
