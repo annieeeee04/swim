@@ -5,7 +5,10 @@ UBC Aquatic Centre drop-in **Length Swim** schedule (25m/50m only) — a Java ba
 Also includes a **Pool** tab: pick a character, browse the real schedule to pick
 a time slot and pool length, click a lane on an animated 10-lane pool to start a
 swim, then log the distance you actually swam — persisted via a Spring
-Data JPA + H2 backend.
+Data JPA + H2 backend. A **My Records** tab then shows your swim history (total
+swims, distance, longest swim) in a card grid styled with an interactive,
+cursor-reactive "fluid glass" (glassmorphism) effect that runs across every
+page, not just Records.
 
 ## Structure
 
@@ -13,7 +16,7 @@ Data JPA + H2 backend.
 swim/
 ├── backend/   Spring Boot (Java 17, Maven) — schedule API + swim-record API (H2)
 ├── frontend/  Vite + React + TypeScript
-└── infra/     AWS (S3 + CloudFront) deployment setup notes
+└── infra/     AWS (S3 + CloudFront + EC2) deployment setup notes
 ```
 
 ## Architecture
@@ -27,25 +30,43 @@ swim/
         ▼                 ▼                  ▼
  mvn package        npm build/lint     docker build+push
  (backend)          (frontend)         (GHCR: backend + frontend images)
-                          │
-                          ▼
-              aws s3 sync dist/ → S3 bucket
-                          │
-                          ▼
-              CloudFront cache invalidation
-                          │
-                          ▼
-                    Browser (SPA)  ──fetch──▶  Backend API (Spring Boot, Dockerized)
+                          │                  │
+                          │      ┌───────────┴────────────┐
+                          │      ▼                         ▼
+                          │  aws s3 sync dist/ →     SSM RunCommand →
+                          │  S3 bucket                EC2: docker pull
+                          │      │                    + restart container
+                          │      ▼                         │
+                          │  CloudFront #1                 ▼
+                          │  (frontend, HTTPS)        EC2 (Docker, :8080)
+                          │      │                         ▲
+                          │      ▼                         │
+                          │  Browser (SPA) ──fetch──▶ CloudFront #2 ──┘
+                          │                            (backend reverse
+                          │                             proxy, HTTPS → :8080)
 ```
 
-- **Backend**: containerized with Docker, runs anywhere a container can run
-  (the H2 database file persists via a mounted volume).
+- **Backend**: containerized with Docker, deployed to a single **EC2**
+  instance (Elastic IP, Amazon Linux 2023). The container always listens on
+  `:8080`; deploys happen with no SSH and no stored AWS keys — GitHub
+  Actions assumes an OIDC role and pushes the new container via **AWS
+  Systems Manager (SSM RunCommand)**.
+- **Backend reverse proxy**: a second **CloudFront distribution** sits in
+  front of the EC2 instance as a TLS-terminating reverse proxy — it's a
+  "custom origin" pointed at `<ec2-host>:8080` (HTTP only, no cert/domain
+  needed on the EC2 side). This exists because the frontend is served over
+  HTTPS and browsers block a HTTPS page from calling a plain `http://`
+  backend ("mixed content"); CloudFront gives the backend a free HTTPS front
+  door without standing up nginx/Let's Encrypt or owning a domain.
 - **Frontend**: built as a static bundle and deployed to **S3 + CloudFront**
-  rather than run as a long-lived server — see `infra/AWS_SETUP.md` for the
-  one-time AWS setup (OIDC role, bucket, distribution) and the reasoning.
-- **CI/CD**: `.github/workflows/ci-cd.yml` builds and lints both apps on every
-  push/PR, then (on `main`) builds + pushes Docker images to GHCR and deploys
-  the frontend to S3 with a CloudFront invalidation.
+  (a separate, first CloudFront distribution) rather than run as a
+  long-lived server — see `infra/AWS_SETUP.md` for the one-time AWS setup
+  (OIDC role, bucket, distribution) and the reasoning.
+- **CI/CD**: `.github/workflows/ci-cd.yml` builds and lints both apps on
+  every push/PR, then (on `main`) builds + pushes Docker images to GHCR,
+  redeploys the backend container on EC2 via SSM, and deploys the frontend
+  to S3 with a CloudFront invalidation — all in one pipeline, no manual
+  steps.
 
 ## Backend
 
@@ -56,15 +77,28 @@ cd backend
 mvn spring-boot:run
 ```
 
-Runs on `http://localhost:8080`. Endpoints:
+Runs on `http://localhost:8080` (always — in production this port is never
+exposed directly to the internet; the CloudFront reverse proxy described
+above is what the browser actually talks to). Endpoints:
 
 - `GET /api/schedule` — cached schedule (refetches from UBC if the cache, default 10 min, is stale)
 - `POST /api/schedule/refresh` — force a fresh fetch from UBC
 - `GET /api/health` — health check
+- `GET /api/swim-records` — full swim history, most recent first (powers the **My Records** tab)
+- `GET /api/swim-records/occupied-lanes` — lanes (1–10) currently in use
+- `POST /api/swim-records` — start a swim (character, pool length, optional lane)
+- `PATCH /api/swim-records/{id}` — finish a swim, recording the distance actually swum
+- `DELETE /api/swim-records/{id}` — delete a record
 
 The backend fetches 7 daily windows from `recreation.ubc.ca/pm-feed` concurrently, filters to only `Drop-in - 25m Length Swim` / `Drop-in - 50m Length Swim` sessions (excluding Aqua Fitness, Community Swim, Sensory-Sensitive, and 2STNB swims), and caches the merged result in memory.
 
-Config lives in `backend/src/main/resources/application.properties` — notably `app.cors.allowed-origins` (who's allowed to call the API) and `app.schedule.cache-minutes`.
+Config lives in `backend/src/main/resources/application.properties` — notably
+`app.cors.allowed-origins` (who's allowed to call the API) and
+`app.schedule.cache-minutes`. CORS (`CorsConfig.java`) allows
+`GET, POST, PATCH, PUT, DELETE` on `/api/**` — the wider method list (beyond
+just `GET, POST`) exists because the swim-records API uses `PATCH` to finish
+a swim, and browsers preflight that with an `OPTIONS` request that must also
+pass CORS.
 
 ## Frontend
 
@@ -76,9 +110,9 @@ npm install
 npm run dev
 ```
 
-Runs on `http://localhost:5173` by default and expects the backend at `http://localhost:8080` (override via `VITE_API_BASE_URL`, see `.env.example`).
+Runs on `http://localhost:5173` by default and expects the backend at `http://localhost:8080` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
 
-Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page.
+Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page.
 
 ## Docker
 
@@ -101,17 +135,33 @@ Each app also has its own standalone `Dockerfile` if you only need one.
    `dist/` as an artifact
 3. **docker-publish** (main only) — builds both Dockerfiles, pushes to
    `ghcr.io/<owner>/<repo>/swim-backend` and `swim-frontend`
-4. **deploy-frontend-s3** (main only) — syncs the built frontend to S3 and
-   invalidates CloudFront, authenticating via OIDC (no stored AWS keys)
+4. **deploy-backend-ec2** (main only) — assumes the OIDC role, then uses
+   `aws ssm send-command` to tell the EC2 instance to `docker pull` the new
+   backend image and restart the container (no SSH, no stored keys; the
+   data directory's permissions are reset on every deploy to avoid an H2
+   file-lock crash loop)
+5. **deploy-frontend-s3** (main only) — syncs the built frontend to S3 and
+   invalidates the frontend's CloudFront distribution, authenticating via
+   the same OIDC role
 
 ## AWS deployment
 
-The frontend deploys as a static site to **S3 + CloudFront**. See
+The frontend deploys as a static site to **S3 + CloudFront**. The backend
+runs as a Docker container on a single **EC2** instance, fronted by a
+*second*, independent CloudFront distribution acting purely as a TLS
+reverse proxy (custom HTTP origin → EC2:8080, no caching) so the backend
+gets HTTPS without a domain or a reverse-proxy server of its own. See
 [`infra/AWS_SETUP.md`](infra/AWS_SETUP.md) for the one-time setup (bucket,
-distribution, IAM OIDC role, required GitHub secrets) and the design reasoning.
+both distributions, EC2 instance + IAM instance profile, IAM OIDC role,
+required GitHub secrets/variables) and the design reasoning.
 
 ## Notes
 
 - Both apps are independent — no shared build step. Run them in two terminals
   (or via `docker compose up`).
-- For production, set `VITE_API_BASE_URL` to wherever the backend is deployed, and update `app.cors.allowed-origins` to match wherever the frontend is hosted.
+- For production, `VITE_API_BASE_URL` (GitHub Actions variable) points at the
+  backend's CloudFront HTTPS domain, and `app.cors.allowed-origins` (passed
+  to the backend container as `APP_CORS_ALLOWED_ORIGINS`, via the
+  `FRONTEND_ORIGIN` GitHub Actions variable) is set to the frontend's
+  CloudFront HTTPS domain — each side's "origin" is the *other* CloudFront
+  distribution's domain, not a raw IP/port.
