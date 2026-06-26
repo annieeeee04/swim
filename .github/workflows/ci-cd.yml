@@ -135,7 +135,7 @@ jobs:
               "docker rm swim-backend || true",
               "mkdir -p /home/ec2-user/swim-data",
               "sudo chmod -R 777 /home/ec2-user/swim-data",
-              "docker run -d --name swim-backend --restart unless-stopped -p 8080:8080 -v /home/ec2-user/swim-data:/app/data ghcr.io/'"${{ env.BACKEND_IMAGE }}"':latest"
+              "docker run -d --name swim-backend --restart unless-stopped -p 8080:8080 -v /home/ec2-user/swim-data:/app/data -e APP_CORS_ALLOWED_ORIGINS='"${{ vars.FRONTEND_ORIGIN }}"' ghcr.io/'"${{ env.BACKEND_IMAGE }}"':latest"
             ]' \
             --query "Command.CommandId" --output text)
 
