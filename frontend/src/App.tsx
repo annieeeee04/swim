@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import "./components/PoolView.css";
+import "./components/RecordsView.css";
 import { fetchSchedule, refreshSchedule } from "./api";
 import PoolView from "./components/PoolView";
 import ScheduleView from "./components/ScheduleView";
+import RecordsView from "./components/RecordsView";
+import FluidCursor from "./components/FluidCursor";
 import type { PoolFilter, SwimEvent } from "./types";
 
-type Tab = "schedule" | "pool";
+type Tab = "schedule" | "pool" | "records";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -60,19 +63,25 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
+      <FluidCursor />
+      <header className="app-header glass-surface" data-glass>
         <div className="brand">
           <h1>🏊 UBC Length Swim</h1>
           <p className="tagline">Schedule + Pool Tracker</p>
         </div>
         {tab === "schedule" && (
-          <button className="refresh-button" onClick={handleRefresh} disabled={refreshing}>
+          <button
+            className="refresh-button glass-surface"
+            data-glass
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
             {refreshing ? "Refreshing…" : "↻ Refresh"}
           </button>
         )}
       </header>
 
-      <div className="tabs">
+      <div className="tabs glass-surface" data-glass>
         <button
           className={`tab ${tab === "schedule" ? "active" : ""}`}
           onClick={() => setTab("schedule")}
@@ -81,6 +90,12 @@ function App() {
         </button>
         <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
           Pool
+        </button>
+        <button
+          className={`tab ${tab === "records" ? "active" : ""}`}
+          onClick={() => setTab("records")}
+        >
+          My Records
         </button>
       </div>
 
@@ -94,7 +109,8 @@ function App() {
             {FILTERS.map((f) => (
               <button
                 key={f.value}
-                className={`chip ${filter === f.value ? "active" : ""}`}
+                className={`chip glass-surface ${filter === f.value ? "active" : ""}`}
+                data-glass
                 onClick={() => setFilter(f.value)}
               >
                 {f.label}
@@ -109,6 +125,8 @@ function App() {
       )}
 
       {tab === "pool" && <PoolView events={events} />}
+
+      {tab === "records" && <RecordsView />}
     </div>
   );
 }

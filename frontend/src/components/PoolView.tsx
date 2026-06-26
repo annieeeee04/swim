@@ -190,7 +190,8 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             {CHARACTERS.map((c) => (
               <button
                 key={c.id}
-                className="character-card"
+                className="character-card glass-surface"
+                data-glass
                 onClick={() => {
                   setCharacter(c);
                   setStage("slot");
@@ -221,7 +222,8 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                     {slots.map((slot) => (
                       <button
                         key={`${slot.start}|${slot.end}`}
-                        className="slot-button"
+                        className="slot-button glass-surface"
+                        data-glass
                         onClick={() => handlePickSlot(slot)}
                       >
                         <span>
@@ -363,7 +365,7 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             )}
 
             {stage === "summary" && finishedRecord && (
-              <div className="summary-card">
+              <div className="summary-card glass-surface" data-glass>
                 <p>
                   🎉 Nice swim, {character.name}! You swam{" "}
                   <strong>{finishedRecord.distanceMeters}m</strong> in Lane {finishedRecord.lane} (

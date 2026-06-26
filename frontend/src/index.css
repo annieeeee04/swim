@@ -13,6 +13,7 @@
   --shadow-card: 0 8px 24px rgba(168, 85, 247, 0.08), 0 1px 3px rgba(44, 35, 80, 0.04);
   --radius-card: 20px;
   --radius-pill: 999px;
+  --glass-shine-size: 240px;
 }
 
 * {
@@ -32,4 +33,52 @@ body {
 
 h1, h2, h3 {
   font-family: "Quicksand", "Nunito", sans-serif;
+}
+
+/*
+ * Fluid glass system, used app-wide.
+ * `.glass-surface` turns a card into frosted, translucent glass so the
+ * page's gradient backdrop (and the moving FluidCursor trail) show through
+ * it. `[data-glass]` is the interactive part: a cursor-tracked shine that
+ * sweeps across the surface as you move over it (driven by --mx/--my,
+ * set in utils/glassPointer.ts), giving each card a "liquid" highlight that
+ * reacts to the user the way light moves across real glass.
+ */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+}
+
+[data-glass] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-glass]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    var(--glass-shine-size) var(--glass-shine-size) at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.6),
+    transparent 70%
+  );
+  opacity: 0;
+  mix-blend-mode: overlay;
+  transition: opacity 0.25s ease;
+}
+
+[data-glass].glass-active::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-glass]::after {
+    transition: none;
+  }
 }

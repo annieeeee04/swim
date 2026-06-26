@@ -14,7 +14,7 @@ export default function SessionRow({ event }: { event: SwimEvent }) {
   const isCommunityNight = event.title.toLowerCase().includes("community night");
 
   return (
-    <li className="session">
+    <li className="session glass-surface" data-glass>
       <span className="session-emoji" aria-hidden="true">
         {isFifty ? "🏊‍♀️" : "🏊"}
       </span>
