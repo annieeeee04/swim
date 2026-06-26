@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { CHARACTERS, type Character } from "../data/characters";
 import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
 import type { SwimEvent, SwimRecord } from "../types";
 import { formatDayHeading, formatTime } from "../utils/time";
-import PoolScene from "./PoolScene";
-import SwimmerAvatar, { type SwimmerPose } from "./SwimmerAvatar";
+import type { SwimmerPose3D } from "./Pool3D";
+import SwimmerAvatar from "./SwimmerAvatar";
+
+// Three.js is heavy, so the 3D pool scene is its own lazy-loaded chunk —
+// it only downloads once someone actually opens the Pool tab.
+const Pool3D = lazy(() => import("./Pool3D"));
 
 type Stage =
   | "character"
@@ -24,18 +28,7 @@ interface Slot {
   lengths: (25 | 50)[];
 }
 
-const DECK_Y = 45; // px, center of the deck strip
-const LANE_ROW_HEIGHT = 52; // px, must match .lane height in PoolView.css
-const DECK_HEIGHT = 90; // px, must match .pool-deck height in PoolView.css
 const CLIMB_MS = 800;
-
-function laneCenterXPercent(lane: number): number {
-  return (lane - 0.5) * 10;
-}
-
-function laneWaterY(lane: number): number {
-  return DECK_HEIGHT + (lane - 1) * LANE_ROW_HEIGHT + LANE_ROW_HEIGHT / 2;
-}
 
 /** Groups the schedule into unique time slots (start–end), noting which pool
  *  length(s) are actually offered at each one — some slots only run a 25m
@@ -175,11 +168,10 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
     setError(null);
   }
 
-  const showAvatar = record !== null;
-  const xPercent = stage === "arriving" ? 50 : record ? laneCenterXPercent(record.lane) : 50;
-  const yPx = stage === "swimming" ? (record ? laneWaterY(record.lane) : DECK_Y) : DECK_Y;
-  const pose: SwimmerPose = stage === "swimming" ? "swim" : stage === "climbing" ? "climb" : "stand";
-  const bobbing = stage === "swimming";
+  const pose3d: SwimmerPose3D = stage === "swimming" ? "swim" : stage === "climbing" ? "climb" : "stand";
+  // Each swim has a unique record id, so using it directly as the splash
+  // trigger fires exactly one burst per swim without extra state.
+  const splashTrigger = stage === "swimming" && record ? record.id : 0;
 
   return (
     <div className="pool-view">
@@ -269,9 +261,11 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             <SwimmerAvatar character={character} pose="stand" size={32} />
             Pick your lane, {character.name}!
           </h2>
-          <p className="pool-meta">Tap an open lane below.</p>
+          <p className="pool-meta">Drag to rotate, scroll/pinch to zoom, tap an open lane below.</p>
           <div className="pool-stage pool-stage-big">
-            <PoolScene activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
+            <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
+              <Pool3D activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
+            </Suspense>
           </div>
           {error && <p className="pool-error">{error}</p>}
         </div>
@@ -294,30 +288,19 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
               )}
             </p>
             <div className="pool-stage pool-stage-big">
-              <PoolScene activeLane={record.lane} />
-              {showAvatar && (
-                <div className="avatar-wrapper" style={{ left: `${xPercent}%`, top: `${yPx}px` }}>
-                  <div className={`avatar-inner ${bobbing ? "avatar-bob" : ""}`}>
-                    <SwimmerAvatar character={character} pose={pose} size={48} />
-                  </div>
-                </div>
-              )}
-              {stage === "swimming" && (
-                // Keyed by record id so the splash animation plays once (and
-                // stays invisible afterwards via animation-fill-mode) each
-                // time this swimmer jumps in, without needing extra state.
-                <div
-                  key={`splash-${record.id}`}
-                  className="splash-wrapper"
-                  style={{ left: `${xPercent}%`, top: `${laneWaterY(record.lane)}px` }}
-                >
-                  <span className="splash-ring" />
-                  <span className="splash-ring splash-ring-delay" />
-                  <span className="splash-drop splash-drop-1">💦</span>
-                  <span className="splash-drop splash-drop-2">💦</span>
-                  <span className="splash-drop splash-drop-3">💦</span>
-                </div>
-              )}
+              <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
+                <Pool3D
+                  activeLane={record.lane}
+                  swimmer={{
+                    suit: character.suit,
+                    skin: character.skin,
+                    cap: character.cap,
+                    lane: record.lane,
+                    pose: pose3d,
+                  }}
+                  splashTrigger={splashTrigger}
+                />
+              </Suspense>
             </div>
 
             {stage === "poolside" && (
