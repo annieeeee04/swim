@@ -3,10 +3,10 @@ import "./App.css";
 import "./components/PoolView.css";
 import "./components/RecordsView.css";
 import "./components/IntroPage.css";
-import "./components/ScheduleLanePool.css";
+import "./components/AquaticCenterSchedule.css";
 import { fetchSchedule, refreshSchedule } from "./api";
 import PoolView from "./components/PoolView";
-import ScheduleLanePool from "./components/ScheduleLanePool";
+import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
 import RecordsView from "./components/RecordsView";
 import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
@@ -133,7 +133,7 @@ function App() {
 
           {loading && <p className="empty-state">Loading schedule…</p>}
           {error && <p className="error-state">⚠️ {error}</p>}
-          {!loading && !error && <ScheduleLanePool events={events} filter={filter} />}
+          {!loading && !error && <AquaticCenterSchedule events={events} filter={filter} />}
         </>
       )}
 
