@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import "./components/PoolView.css";
 import "./components/RecordsView.css";
+import "./components/IntroPage.css";
+import "./components/ScheduleLanePool.css";
 import { fetchSchedule, refreshSchedule } from "./api";
 import PoolView from "./components/PoolView";
-import ScheduleView from "./components/ScheduleView";
+import ScheduleLanePool from "./components/ScheduleLanePool";
 import RecordsView from "./components/RecordsView";
 import FluidCursor from "./components/FluidCursor";
+import IntroPage from "./components/IntroPage";
 import type { PoolFilter, SwimEvent } from "./types";
 
 type Tab = "schedule" | "pool" | "records";
@@ -18,6 +21,7 @@ const FILTERS: { value: PoolFilter; label: string }[] = [
 ];
 
 function App() {
+  const [started, setStarted] = useState(false);
   const [tab, setTab] = useState<Tab>("schedule");
   const [events, setEvents] = useState<SwimEvent[]>([]);
   const [filter, setFilter] = useState<PoolFilter>("all");
@@ -60,6 +64,15 @@ function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  if (!started) {
+    return (
+      <>
+        <FluidCursor />
+        <IntroPage onStart={() => setStarted(true)} />
+      </>
+    );
+  }
 
   return (
     <div className="app">
@@ -120,7 +133,7 @@ function App() {
 
           {loading && <p className="empty-state">Loading schedule…</p>}
           {error && <p className="error-state">⚠️ {error}</p>}
-          {!loading && !error && <ScheduleView events={events} filter={filter} />}
+          {!loading && !error && <ScheduleLanePool events={events} filter={filter} />}
         </>
       )}
 

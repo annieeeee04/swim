@@ -18,6 +18,14 @@ export interface Swimmer3D {
   modelRotationY?: number;
 }
 
+/** Per-lane schedule summary used in "browse" mode (Schedule tab) to tint
+ *  each lane by what it's running and show a small session-count badge. */
+export interface LaneScheduleInfo {
+  has25: boolean;
+  has50: boolean;
+  count: number;
+}
+
 interface Pool3DProps {
   lanesCount?: number;
   activeLane: number | null;
@@ -27,6 +35,8 @@ interface Pool3DProps {
   swimmer?: Swimmer3D | null;
   /** Bump this number to trigger a one-off splash effect in the swimmer's lane. */
   splashTrigger?: number;
+  /** Schedule-browsing mode: per-lane session summary, keyed by lane number. */
+  laneInfo?: Record<number, LaneScheduleInfo>;
 }
 
 const LANE_WIDTH = 1.5;
@@ -97,6 +107,42 @@ function makeLaneNumberSprite(lane: number, color: string): THREE.Sprite {
   return sprite;
 }
 
+/** Small pill badge floating above the water at the far end of a lane,
+ *  showing how many sessions it has and whether they're 25m/50m. Drawn onto
+ *  a canvas so it can be cheaply redrawn in place (texture.needsUpdate) any
+ *  time laneInfo changes, instead of rebuilding the sprite. */
+function drawLaneBadge(
+  canvas: HTMLCanvasElement,
+  info: LaneScheduleInfo | undefined,
+): void {
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!info || info.count === 0) return;
+  const color = info.has25 && info.has50 ? "#14b8a6" : info.has50 ? "#a855f7" : "#38bdf8";
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(64, 64, 56, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 56px Nunito, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(info.count), 64, 70);
+}
+
+function makeLaneBadgeSprite(): { sprite: THREE.Sprite; canvas: HTMLCanvasElement } {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.5, 0.5, 0.5);
+  sprite.visible = false;
+  return { sprite, canvas };
+}
+
 /** White ceramic deck tiles with light grout lines, generated procedurally
  *  (no external image) so the deck reads as tiled rather than flat-colored. */
 function makeDeckTileTexture(): THREE.CanvasTexture {
@@ -159,9 +205,11 @@ export default function Pool3D({
   onPickLane,
   swimmer = null,
   splashTrigger = 0,
+  laneInfo,
 }: Pool3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lanePlanesRef = useRef<THREE.Mesh[]>([]);
+  const laneBadgesRef = useRef<{ sprite: THREE.Sprite; canvas: HTMLCanvasElement; lane: number }[]>([]);
   const swimmerGroupRef = useRef<THREE.Group | null>(null);
   const modelHolderRef = useRef<THREE.Group | null>(null);
   const placeholderRef = useRef<THREE.Group | null>(null);
@@ -171,16 +219,18 @@ export default function Pool3D({
     occupiedLanes,
     onPickLane,
     swimmer,
+    laneInfo,
   });
   const splashGroupRef = useRef<THREE.Group | null>(null);
   const splashesRef = useRef<{ mesh: THREE.Mesh; born: number }[]>([]);
   const elapsedRef = useRef(0);
+  const lastLaneInfoRef = useRef<Record<number, LaneScheduleInfo> | undefined>(undefined);
 
   // Keep the imperative render loop reading the latest props without
   // tearing the whole three.js scene down and rebuilding it every render.
   useEffect(() => {
-    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer };
-  }, [activeLane, occupiedLanes, onPickLane, swimmer]);
+    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer, laneInfo };
+  }, [activeLane, occupiedLanes, onPickLane, swimmer, laneInfo]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -312,8 +362,16 @@ export default function Pool3D({
       const sprite = makeLaneNumberSprite(lane, "rgba(28, 126, 214, 0.92)");
       sprite.position.set(deckCenterX + DECK_LENGTH / 2 + 0.15, DECK_HEIGHT + 0.4, z);
       scene.add(sprite);
+
+      // Schedule-browse badge, floating above the far (water) end of the lane.
+      const { sprite: badgeSprite, canvas: badgeCanvas } = makeLaneBadgeSprite();
+      badgeSprite.position.set(waterCenterX + WATER_LENGTH / 2 - 0.3, waterSurfaceY + 0.6, z);
+      scene.add(badgeSprite);
+      laneBadgesRef.current.push({ sprite: badgeSprite, canvas: badgeCanvas, lane });
     }
     lanePlanesRef.current = lanePlanes;
+    // (laneBadgesRef entries start invisible; the laneInfo effect below
+    // paints/reveals them right after this effect runs.)
 
     // ---------- swimmer figure ----------
     // A simple capsule+sphere placeholder shows immediately; it's hidden as
@@ -410,18 +468,41 @@ export default function Pool3D({
       raf = requestAnimationFrame(tick);
       const t = clock.getElapsedTime();
       elapsedRef.current = t;
-      const { activeLane: curActiveLane, occupiedLanes: curOccupied, swimmer: curSwimmer } = stateRef.current;
+      const {
+        activeLane: curActiveLane,
+        occupiedLanes: curOccupied,
+        swimmer: curSwimmer,
+        laneInfo: curLaneInfo,
+      } = stateRef.current;
 
-      // lane highlight colors: active (purple) > occupied (muted) > free (invisible)
+      // Repaint lane badges only when the schedule summary actually changes
+      // (cheap reference check; the canvas redraw itself is the expensive part).
+      if (curLaneInfo !== lastLaneInfoRef.current) {
+        lastLaneInfoRef.current = curLaneInfo;
+        for (const badge of laneBadgesRef.current) {
+          const info = curLaneInfo?.[badge.lane];
+          drawLaneBadge(badge.canvas, info);
+          const material = badge.sprite.material as THREE.SpriteMaterial;
+          material.map!.needsUpdate = true;
+          badge.sprite.visible = Boolean(info && info.count > 0);
+        }
+      }
+
+      // lane highlight colors: active (purple) > occupied (muted) > schedule
+      // tint (browse mode) > free (invisible)
       for (const plane of lanePlanesRef.current) {
         const lane = plane.userData.lane as number;
         const mat = plane.material as THREE.MeshBasicMaterial;
+        const info = curLaneInfo?.[lane];
         if (lane === curActiveLane) {
           mat.color.set(0xa855f7);
           mat.opacity = 0.22;
         } else if (curOccupied.includes(lane)) {
           mat.color.set(0x8a83a8);
           mat.opacity = 0.18;
+        } else if (info && info.count > 0) {
+          mat.color.set(info.has25 && info.has50 ? 0x14b8a6 : info.has50 ? 0xa855f7 : 0x38bdf8);
+          mat.opacity = 0.15;
         } else {
           mat.opacity = 0;
         }
