@@ -37,7 +37,13 @@ interface Pool3DProps {
   splashTrigger?: number;
   /** Schedule-browsing mode: per-lane session summary, keyed by lane number. */
   laneInfo?: Record<number, LaneScheduleInfo>;
+  /** Lane-picking mode only: a walkable character the visitor drives along
+   *  the deck with WASD/arrow keys, picking the lane they're standing in
+   *  front of with Enter/Space (in addition to the existing tap-to-pick). */
+  roamer?: { modelUrl: string; modelScale?: number; modelRotationY?: number } | null;
 }
+
+const ROAMER_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", " "]);
 
 const LANE_WIDTH = 1.5;
 const WATER_LENGTH = 9;
@@ -206,6 +212,7 @@ export default function Pool3D({
   swimmer = null,
   splashTrigger = 0,
   laneInfo,
+  roamer = null,
 }: Pool3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lanePlanesRef = useRef<THREE.Mesh[]>([]);
@@ -214,12 +221,21 @@ export default function Pool3D({
   const modelHolderRef = useRef<THREE.Group | null>(null);
   const placeholderRef = useRef<THREE.Group | null>(null);
   const loadedModelUrlRef = useRef<string | null>(null);
+  const roamerGroupRef = useRef<THREE.Group | null>(null);
+  const roamerHolderRef = useRef<THREE.Group | null>(null);
+  const roamerPlaceholderRef = useRef<THREE.Group | null>(null);
+  const loadedRoamerUrlRef = useRef<string | null>(null);
+  const roamerZRef = useRef(0);
+  const roamerFacingRef = useRef(0);
+  const roamerKeysRef = useRef<Set<string>>(new Set());
+  const roamerHoverLaneRef = useRef<number | null>(null);
   const stateRef = useRef({
     activeLane,
     occupiedLanes,
     onPickLane,
     swimmer,
     laneInfo,
+    roamer,
   });
   const splashGroupRef = useRef<THREE.Group | null>(null);
   const splashesRef = useRef<{ mesh: THREE.Mesh; born: number }[]>([]);
@@ -229,8 +245,8 @@ export default function Pool3D({
   // Keep the imperative render loop reading the latest props without
   // tearing the whole three.js scene down and rebuilding it every render.
   useEffect(() => {
-    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer, laneInfo };
-  }, [activeLane, occupiedLanes, onPickLane, swimmer, laneInfo]);
+    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer };
+  }, [activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -401,6 +417,47 @@ export default function Pool3D({
     scene.add(swimmerGroup);
     swimmerGroupRef.current = swimmerGroup;
 
+    // ---------- roamer (walkable lane-picking avatar) ----------
+    const roamerPlaceholder = new THREE.Group();
+    const roamerBody = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.24, 0.42, 4, 12),
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 }),
+    );
+    roamerPlaceholder.add(roamerBody);
+    const roamerHead = new THREE.Mesh(
+      new THREE.SphereGeometry(0.19, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xf3c89e, roughness: 0.7 }),
+    );
+    roamerHead.position.y = 0.5;
+    roamerPlaceholder.add(roamerHead);
+    roamerPlaceholderRef.current = roamerPlaceholder;
+
+    const roamerHolder = new THREE.Group();
+    roamerHolderRef.current = roamerHolder;
+
+    const roamerGroup = new THREE.Group();
+    roamerGroup.add(roamerPlaceholder);
+    roamerGroup.add(roamerHolder);
+    roamerGroup.visible = false;
+    scene.add(roamerGroup);
+    roamerGroupRef.current = roamerGroup;
+    roamerZRef.current = 0;
+
+    const handleRoamerKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!ROAMER_KEYS.has(key)) return;
+      if (!stateRef.current.roamer) return;
+      const target = document.activeElement;
+      if (target && /input|textarea|select/i.test(target.tagName)) return;
+      if (key.startsWith("arrow") || key === " ") e.preventDefault();
+      roamerKeysRef.current.add(key);
+    };
+    const handleRoamerKeyUp = (e: KeyboardEvent) => {
+      roamerKeysRef.current.delete(e.key.toLowerCase());
+    };
+    window.addEventListener("keydown", handleRoamerKeyDown);
+    window.addEventListener("keyup", handleRoamerKeyUp);
+
     // ---------- splash effect group ----------
     const splashGroup = new THREE.Group();
     scene.add(splashGroup);
@@ -464,16 +521,58 @@ export default function Pool3D({
     // ---------- render loop ----------
     let raf = 0;
     const clock = new THREE.Clock();
+    let prevRoamerEnterHeld = false;
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const t = clock.getElapsedTime();
+      const dt = Math.min(0.05, clock.getDelta());
       elapsedRef.current = t;
       const {
         activeLane: curActiveLane,
         occupiedLanes: curOccupied,
         swimmer: curSwimmer,
         laneInfo: curLaneInfo,
+        roamer: curRoamer,
       } = stateRef.current;
+
+      // ---- roamer: walk along the deck with WASD/arrows, Enter/Space to pick ----
+      const rGroup = roamerGroupRef.current;
+      if (rGroup) {
+        if (curRoamer) {
+          rGroup.visible = true;
+          const keys = roamerKeysRef.current;
+          let dz = 0;
+          if (keys.has("w") || keys.has("arrowup")) dz -= 1;
+          if (keys.has("s") || keys.has("arrowdown")) dz += 1;
+          if (keys.has("a") || keys.has("arrowleft")) dz -= 1;
+          if (keys.has("d") || keys.has("arrowright")) dz += 1;
+          if (dz !== 0) {
+            roamerZRef.current = THREE.MathUtils.clamp(roamerZRef.current + dz * 2.4 * dt, -halfWidth + 0.4, halfWidth - 0.4);
+            roamerFacingRef.current = dz > 0 ? Math.PI / 2 : -Math.PI / 2;
+          }
+          const bob = dz !== 0 ? Math.abs(Math.sin(t * 9)) * 0.05 : 0;
+          rGroup.position.set(deckCenterX, DECK_HEIGHT + 0.45 + bob, roamerZRef.current);
+          rGroup.rotation.y = THREE.MathUtils.lerp(rGroup.rotation.y, roamerFacingRef.current, 0.3);
+
+          const lane = Math.min(lanesCount, Math.max(1, Math.round((roamerZRef.current + halfWidth) / LANE_WIDTH + 0.5)));
+          roamerHoverLaneRef.current = lane;
+
+          const enterHeld = keys.has("enter") || keys.has(" ");
+          if (
+            enterHeld &&
+            !prevRoamerEnterHeld &&
+            stateRef.current.onPickLane &&
+            !stateRef.current.occupiedLanes.includes(lane)
+          ) {
+            stateRef.current.onPickLane(lane);
+          }
+          prevRoamerEnterHeld = enterHeld;
+        } else {
+          rGroup.visible = false;
+          roamerHoverLaneRef.current = null;
+          prevRoamerEnterHeld = false;
+        }
+      }
 
       // Repaint lane badges only when the schedule summary actually changes
       // (cheap reference check; the canvas redraw itself is the expensive part).
@@ -500,6 +599,9 @@ export default function Pool3D({
         } else if (curOccupied.includes(lane)) {
           mat.color.set(0x8a83a8);
           mat.opacity = 0.18;
+        } else if (curRoamer && lane === roamerHoverLaneRef.current) {
+          mat.color.set(0x38bdf8);
+          mat.opacity = 0.26;
         } else if (info && info.count > 0) {
           mat.color.set(info.has25 && info.has50 ? 0x14b8a6 : info.has50 ? 0xa855f7 : 0x38bdf8);
           mat.opacity = 0.15;
@@ -554,6 +656,8 @@ export default function Pool3D({
     return () => {
       cancelAnimationFrame(raf);
       resizeObserver.disconnect();
+      window.removeEventListener("keydown", handleRoamerKeyDown);
+      window.removeEventListener("keyup", handleRoamerKeyUp);
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.domElement.removeEventListener("pointerup", handlePointerUp);
       renderer.domElement.removeEventListener("pointermove", handlePointerMove);
@@ -606,6 +710,40 @@ export default function Pool3D({
       cancelled = true;
     };
   }, [swimmer?.modelUrl, swimmer?.modelScale, swimmer?.modelRotationY]);
+
+  // Load the roamer's GLTF character (lane-picking mode), independently of
+  // the swimmer model loaded once a lane is actually chosen.
+  useEffect(() => {
+    const url = roamer?.modelUrl;
+    const holder = roamerHolderRef.current;
+    const placeholder = roamerPlaceholderRef.current;
+    if (!url || !holder || !placeholder) return;
+    if (loadedRoamerUrlRef.current === url) return;
+
+    let cancelled = false;
+    placeholder.visible = true;
+    loadCharacterTemplate(url)
+      .then((template) => {
+        if (cancelled) return;
+        while (holder.children.length > 0) {
+          holder.remove(holder.children[0]);
+        }
+        const instance = cloneSkeleton(template) as THREE.Object3D;
+        const scale = roamer?.modelScale ?? 1;
+        instance.scale.multiplyScalar(scale);
+        instance.rotation.y = roamer?.modelRotationY ?? 0;
+        holder.add(instance);
+        loadedRoamerUrlRef.current = url;
+        placeholder.visible = false;
+      })
+      .catch(() => {
+        loadedRoamerUrlRef.current = null;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roamer?.modelUrl, roamer?.modelScale, roamer?.modelRotationY]);
 
   // Trigger a splash burst in the swimmer's lane.
   useEffect(() => {

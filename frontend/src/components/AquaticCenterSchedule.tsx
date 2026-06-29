@@ -104,6 +104,10 @@ export default function AquaticCenterSchedule({
               </Suspense>
             </div>
 
+            <span className="stage-hint glass-surface" data-glass>
+              🎮 WASD / arrows to walk · Enter to open a pool
+            </span>
+
             <button
               type="button"
               className="sessions-toggle glass-surface"

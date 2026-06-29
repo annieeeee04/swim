@@ -254,6 +254,46 @@ function addWallRing(
   scene.add(west);
 }
 
+/** A small, simple walking avatar (capsule body + sphere head, two stubby
+ *  arms) — not tied to any specific chosen character, since this map is
+ *  shared across the whole Schedule tab regardless of who's signed up. */
+function buildAvatar(): THREE.Group {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.5 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf3c89e, roughness: 0.7 });
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.26, 4, 10), bodyMat);
+  body.position.y = 0.32;
+  group.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), skinMat);
+  head.position.y = 0.62;
+  group.add(head);
+
+  const armGeo = new THREE.CapsuleGeometry(0.045, 0.16, 4, 8);
+  const leftArm = new THREE.Mesh(armGeo, bodyMat);
+  leftArm.position.set(0.2, 0.34, 0);
+  leftArm.rotation.z = 0.35;
+  group.add(leftArm);
+  const rightArm = leftArm.clone();
+  rightArm.position.x = -0.2;
+  rightArm.rotation.z = -0.35;
+  group.add(rightArm);
+
+  // soft contact shadow blob under the feet
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.22, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.005;
+  group.add(shadow);
+
+  return group;
+}
+
+const AVATAR_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", " "]);
+
 /** Lane flags, navy starting blocks, and a couple of pool-edge ladders for
  *  a real lap pool (Recreation / Competition), matching the small markers
  *  visible along the lanes in the reference floor-plan rendering. */
@@ -313,6 +353,12 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
   const rippleScalesRef = useRef<{ x: number; z: number }[]>([]);
   const baseOpacitiesRef = useRef<number[]>([]);
   const waterBaseYsRef = useRef<number[]>([]);
+  const avatarGroupRef = useRef<THREE.Group | null>(null);
+  const avatarPosRef = useRef(new THREE.Vector3(-1.0, 0, 1.2));
+  const avatarFacingRef = useRef(0);
+  const keysRef = useRef<Set<string>>(new Set());
+  const lastMoveAtRef = useRef(0);
+  const lastNearZoneRef = useRef<string | null>(null);
   const stateRef = useRef({ activeZoneKey, onPickZone, onHoverZone, focusZoneKey });
 
   useEffect(() => {
@@ -571,6 +617,31 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     baseOpacitiesRef.current = baseOpacities;
     waterBaseYsRef.current = waterBaseYs;
 
+    // ---------- walkable avatar ----------
+    // A small game-style explorer the visitor can drive around the floor
+    // plan with WASD/arrow keys, like driving through zones in a 3D
+    // portfolio — walking up to a pool basin hovers it, Enter/Space opens it.
+    const avatar = buildAvatar();
+    avatar.position.copy(avatarPosRef.current);
+    scene.add(avatar);
+    avatarGroupRef.current = avatar;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!AVATAR_KEYS.has(key)) return;
+      const target = document.activeElement;
+      if (target && /input|textarea|select/i.test(target.tagName)) return;
+      if (key === "arrowup" || key === "arrowdown" || key === "arrowleft" || key === "arrowright" || key === " ") {
+        e.preventDefault();
+      }
+      keysRef.current.add(key);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysRef.current.delete(e.key.toLowerCase());
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
     // ---------- resize ----------
     const resize = () => {
       const w = container.clientWidth;
@@ -626,9 +697,79 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
 
     // ---------- render loop ----------
     let raf = 0;
+    const avatarClock = new THREE.Clock();
+    const FLOOR_MIN_X = -7.3;
+    const FLOOR_MAX_X = 4.4;
+    const FLOOR_MIN_Z = -3.7;
+    const FLOOR_MAX_Z = 3.6;
+    const WALK_SPEED = 2.6;
+    let prevEnterHeld = false;
+
+    const isNearZone = (px: number, pz: number, zone: ZoneLayout): boolean => {
+      const pad = 0.5;
+      if (zone.shape === "ellipse") {
+        const rx = zone.width / 2 + pad;
+        const rz = zone.depth / 2 + pad;
+        const dx = (px - zone.x) / rx;
+        const dz = (pz - zone.z) / rz;
+        return dx * dx + dz * dz <= 1;
+      }
+      return (
+        px >= zone.x - zone.width / 2 - pad &&
+        px <= zone.x + zone.width / 2 + pad &&
+        pz >= zone.z - zone.depth / 2 - pad &&
+        pz <= zone.z + zone.depth / 2 + pad
+      );
+    };
+
     const tick = () => {
       raf = requestAnimationFrame(tick);
+      const dt = Math.min(0.05, avatarClock.getDelta());
       const { activeZoneKey: curActive, focusZoneKey: curFocus } = stateRef.current;
+
+      // ---- avatar movement (WASD / arrow keys) ----
+      const keys = keysRef.current;
+      let dx = 0;
+      let dz = 0;
+      if (keys.has("w") || keys.has("arrowup")) dz -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) dz += 1;
+      if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
+      if (keys.has("d") || keys.has("arrowright")) dx += 1;
+      const moving = dx !== 0 || dz !== 0;
+      if (moving) {
+        const len = Math.hypot(dx, dz) || 1;
+        const pos = avatarPosRef.current;
+        pos.x = THREE.MathUtils.clamp(pos.x + (dx / len) * WALK_SPEED * dt, FLOOR_MIN_X, FLOOR_MAX_X);
+        pos.z = THREE.MathUtils.clamp(pos.z + (dz / len) * WALK_SPEED * dt, FLOOR_MIN_Z, FLOOR_MAX_Z);
+        avatarFacingRef.current = Math.atan2(dx, dz);
+        lastMoveAtRef.current = performance.now();
+      }
+      const avatarMesh = avatarGroupRef.current;
+      if (avatarMesh) {
+        const bob = moving ? Math.abs(Math.sin(performance.now() / 160)) * 0.05 : 0;
+        avatarMesh.position.set(avatarPosRef.current.x, bob, avatarPosRef.current.z);
+        avatarMesh.rotation.y = THREE.MathUtils.lerp(avatarMesh.rotation.y, avatarFacingRef.current, 0.25);
+      }
+
+      // ---- proximity to zones: hover + Enter/Space to open ----
+      const nearZone = zones.find((z) => isNearZone(avatarPosRef.current.x, avatarPosRef.current.z, z)) ?? null;
+      const nearKey = nearZone?.key ?? null;
+      if (nearKey !== lastNearZoneRef.current) {
+        lastNearZoneRef.current = nearKey;
+        if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(nearKey);
+      }
+      const enterHeld = keys.has("enter") || keys.has(" ");
+      if (enterHeld && !prevEnterHeld && nearKey && stateRef.current.onPickZone) {
+        stateRef.current.onPickZone(nearKey);
+      }
+      prevEnterHeld = enterHeld;
+
+      // soft camera follow while actively walking, so the view keeps up
+      // with the avatar without fighting a manual orbit/zoom
+      if (!transition && performance.now() - lastMoveAtRef.current < 250) {
+        controls.target.x = THREE.MathUtils.lerp(controls.target.x, avatarPosRef.current.x, 0.06);
+        controls.target.z = THREE.MathUtils.lerp(controls.target.z, avatarPosRef.current.z, 0.06);
+      }
 
       if (curFocus !== appliedFocusKey) {
         appliedFocusKey = curFocus;
@@ -695,6 +836,8 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     return () => {
       cancelAnimationFrame(raf);
       resizeObserver.disconnect();
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
       renderer.domElement.removeEventListener("pointerdown", handleDown);
       renderer.domElement.removeEventListener("pointerup", handleUp);
       renderer.domElement.removeEventListener("pointermove", handleMove);

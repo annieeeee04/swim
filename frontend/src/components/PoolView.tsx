@@ -261,10 +261,21 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             <SwimmerAvatar character={character} pose="stand" size={32} />
             Pick your lane, {character.name}!
           </h2>
-          <p className="pool-meta">Drag to rotate, scroll/pinch to zoom, tap an open lane below.</p>
+          <p className="pool-meta">
+            🎮 WASD/arrows to walk, Enter to pick — or drag to rotate, scroll/pinch to zoom, tap an open lane below.
+          </p>
           <div className="pool-stage pool-stage-big">
             <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
-              <Pool3D activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
+              <Pool3D
+                activeLane={null}
+                onPickLane={handlePickLane}
+                occupiedLanes={occupiedLanes}
+                roamer={{
+                  modelUrl: character.modelUrl,
+                  modelScale: character.modelScale,
+                  modelRotationY: character.modelRotationY,
+                }}
+              />
             </Suspense>
           </div>
           {error && <p className="pool-error">{error}</p>}

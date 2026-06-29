@@ -169,6 +169,28 @@
   touch-action: none;
 }
 
+.stage-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .stage-hint {
+    display: none;
+  }
+}
+
 .sessions-toggle {
   position: absolute;
   top: 14px;
