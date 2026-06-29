@@ -51,25 +51,29 @@ export default function AquaticCenterSchedule({
 
   const { byZone, zoneInfo } = useMemo(() => buildZoneSchedule(dayEvents), [dayEvents]);
 
+  // Positions roughly mirror the real UBC Aquatic Centre floor plan: the
+  // 25m Recreation Pool top-left, the 50m Competition Pool spanning the
+  // full height on the right, and the Leisure Pool + Hot Tub tucked into
+  // the bottom-left corner, nested against each other like the building.
   const zones: ZoneLayout[] = useMemo(() => {
     const hasSplit = Boolean(zoneInfo["comp-north"] || zoneInfo["comp-south"]);
     const base: Omit<ZoneLayout, "count">[] = [
-      { key: "recreation", label: "Recreation Pool", poolLength: 25, shape: "rect", x: -3.6, z: -1.6, width: 3.4, depth: 2.6 },
+      { key: "recreation", label: "Recreation Pool", poolLength: 25, shape: "rect", x: -3.4, z: -1.9, width: 2.8, depth: 3.6 },
       ...(hasSplit
         ? [
-            { key: "comp-north", label: "Competition Pool — North", poolLength: 50 as const, shape: "rect" as const, x: 1.8, z: -1.3, width: 5.6, depth: 2.3 },
-            { key: "comp-south", label: "Competition Pool — South", poolLength: 50 as const, shape: "rect" as const, x: 1.8, z: 1.3, width: 5.6, depth: 2.3 },
+            { key: "comp-north", label: "Competition Pool — North", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: -1.9, width: 4.2, depth: 3.4 },
+            { key: "comp-south", label: "Competition Pool — South", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: 1.9, width: 4.2, depth: 3.4 },
           ]
-        : [{ key: "comp", label: "Competition Pool", poolLength: 50 as const, shape: "rect" as const, x: 1.8, z: 0, width: 5.6, depth: 5.0 }]),
-      { key: "leisure", label: "Leisure Pool", poolLength: null, shape: "ellipse", x: -3.4, z: 1.8, width: 3.0, depth: 2.2 },
+        : [{ key: "comp", label: "Competition Pool", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: 0, width: 4.2, depth: 7.2 }]),
+      { key: "leisure", label: "Leisure Pool", poolLength: null, shape: "leisure", x: -3.3, z: 2.0, width: 3.0, depth: 2.6 },
     ];
     if (zoneInfo["hot-tub"]) {
-      base.push({ key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.0, z: 2.6, width: 1.0, depth: 1.0 });
+      base.push({ key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.0, z: 1.4, width: 1.0, depth: 1.0 });
     }
     let otherIndex = 0;
     for (const [key, info] of Object.entries(zoneInfo)) {
       if (!key.startsWith("other:")) continue;
-      base.push({ key, label: info.label, poolLength: null, shape: "rect", x: 4.8 + otherIndex * 1.4, z: 2.6, width: 1.2, depth: 1.0 });
+      base.push({ key, label: info.label, poolLength: null, shape: "rect", x: 5.6 + otherIndex * 1.4, z: 3.6, width: 1.2, depth: 1.0 });
       otherIndex++;
     }
     return base.map((z) => ({ ...z, count: zoneInfo[z.key]?.count ?? 0 }));
@@ -88,7 +92,13 @@ export default function AquaticCenterSchedule({
         <div className="aquatic-layout">
           <div className="aquatic-stage">
             <Suspense fallback={<div className="pool3d-loading">Loading map…</div>}>
-              <AquaticCenterScene zones={zones} activeZoneKey={activeZoneKey} onPickZone={(key) => setSelectedZoneKey(key)} />
+              <AquaticCenterScene
+                zones={zones}
+                activeZoneKey={activeZoneKey}
+                focusZoneKey={selectedZoneKey}
+                onPickZone={(key) => setSelectedZoneKey(key)}
+                onHoverZone={(key) => setActiveZoneKey(key)}
+              />
             </Suspense>
           </div>
 
