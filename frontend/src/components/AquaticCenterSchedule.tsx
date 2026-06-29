@@ -3,6 +3,7 @@ import type { PoolFilter, SwimEvent } from "../types";
 import { buildZoneSchedule, dayKeyOf, isFiftyMeter, listDays } from "../utils/poolZones";
 import type { ZoneLayout } from "./AquaticCenterScene";
 import { formatDayHeading, formatTime } from "../utils/time";
+import DayCalendarPicker from "./DayCalendarPicker";
 
 // Same lazy-loaded three.js chunk pattern the Pool tab already uses.
 const AquaticCenterScene = lazy(() => import("./AquaticCenterScene"));
@@ -79,19 +80,7 @@ export default function AquaticCenterSchedule({
 
   return (
     <div className="aquatic-schedule">
-      <ul className="day-chips">
-        {days.map((day) => (
-          <li key={day}>
-            <button
-              className={`day-chip glass-surface ${day === activeDay ? "active" : ""}`}
-              data-glass
-              onClick={() => setSelectedDay(day)}
-            >
-              {formatDayHeading(day)}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <DayCalendarPicker days={days} activeDay={activeDay} onSelectDay={setSelectedDay} />
 
       {days.length === 0 && <p className="empty-state">No sessions in the schedule right now.</p>}
 
