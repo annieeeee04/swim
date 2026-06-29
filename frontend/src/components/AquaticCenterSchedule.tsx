@@ -51,29 +51,29 @@ export default function AquaticCenterSchedule({
 
   const { byZone, zoneInfo } = useMemo(() => buildZoneSchedule(dayEvents), [dayEvents]);
 
-  // Positions roughly mirror the real UBC Aquatic Centre floor plan: the
-  // 25m Recreation Pool top-left, the 50m Competition Pool spanning the
-  // full height on the right, and the Leisure Pool + Hot Tub tucked into
-  // the bottom-left corner, nested against each other like the building.
+  // Positions mirror the real UBC Aquatic Centre floor plan: change rooms +
+  // front desk along the left wall, the 25m Recreation Pool stacked above
+  // the Leisure Pool (with the Hot Tub nested into the corner between them),
+  // and the 50m Competition Pool spanning the full height on the right.
   const zones: ZoneLayout[] = useMemo(() => {
     const hasSplit = Boolean(zoneInfo["comp-north"] || zoneInfo["comp-south"]);
     const base: Omit<ZoneLayout, "count">[] = [
-      { key: "recreation", label: "Recreation Pool", poolLength: 25, shape: "rect", x: -3.4, z: -1.9, width: 2.8, depth: 3.6 },
+      { key: "recreation", label: "Recreation Pool", poolLength: 25, shape: "rect", x: -4.0, z: -1.8, width: 3.0, depth: 3.2 },
       ...(hasSplit
         ? [
-            { key: "comp-north", label: "Competition Pool — North", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: -1.9, width: 4.2, depth: 3.4 },
-            { key: "comp-south", label: "Competition Pool — South", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: 1.9, width: 4.2, depth: 3.4 },
+            { key: "comp-north", label: "Competition Pool — North", poolLength: 50 as const, shape: "rect" as const, x: 1.6, z: -1.75, width: 4.4, depth: 3.2 },
+            { key: "comp-south", label: "Competition Pool — South", poolLength: 50 as const, shape: "rect" as const, x: 1.6, z: 1.75, width: 4.4, depth: 3.2 },
           ]
-        : [{ key: "comp", label: "Competition Pool", poolLength: 50 as const, shape: "rect" as const, x: 2.6, z: 0, width: 4.2, depth: 7.2 }]),
-      { key: "leisure", label: "Leisure Pool", poolLength: null, shape: "leisure", x: -3.3, z: 2.0, width: 3.0, depth: 2.6 },
+        : [{ key: "comp", label: "Competition Pool", poolLength: 50 as const, shape: "rect" as const, x: 1.6, z: 0, width: 4.4, depth: 6.6 }]),
+      { key: "leisure", label: "Leisure Pool", poolLength: null, shape: "leisure", x: -4.0, z: 1.7, width: 2.8, depth: 2.4 },
     ];
     if (zoneInfo["hot-tub"]) {
-      base.push({ key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.0, z: 1.4, width: 1.0, depth: 1.0 });
+      base.push({ key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.7, z: 0.4, width: 0.9, depth: 0.9 });
     }
     let otherIndex = 0;
     for (const [key, info] of Object.entries(zoneInfo)) {
       if (!key.startsWith("other:")) continue;
-      base.push({ key, label: info.label, poolLength: null, shape: "rect", x: 5.6 + otherIndex * 1.4, z: 3.6, width: 1.2, depth: 1.0 });
+      base.push({ key, label: info.label, poolLength: null, shape: "rect", x: 4.4 + otherIndex * 1.4, z: 3.6, width: 1.2, depth: 1.0 });
       otherIndex++;
     }
     return base.map((z) => ({ ...z, count: zoneInfo[z.key]?.count ?? 0 }));
