@@ -43,6 +43,7 @@ export default function AquaticCenterSchedule({
 
   const [activeZoneKey, setActiveZoneKey] = useState<string | null>(null);
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   const dayEvents = useMemo(
     () => applyPoolFilter(events.filter((ev) => dayKeyOf(ev.start) === activeDay), filter),
@@ -90,62 +91,93 @@ export default function AquaticCenterSchedule({
 
       {activeDay && (
         <div className="aquatic-layout">
-          <div className="aquatic-stage">
-            <Suspense fallback={<div className="pool3d-loading">Loading map…</div>}>
-              <AquaticCenterScene
-                zones={zones}
-                activeZoneKey={activeZoneKey}
-                focusZoneKey={selectedZoneKey}
-                onPickZone={(key) => setSelectedZoneKey(key)}
-                onHoverZone={(key) => setActiveZoneKey(key)}
-              />
-            </Suspense>
+          <div className="aquatic-stage-wrap">
+            <div className="aquatic-stage">
+              <Suspense fallback={<div className="pool3d-loading">Loading map…</div>}>
+                <AquaticCenterScene
+                  zones={zones}
+                  activeZoneKey={activeZoneKey}
+                  focusZoneKey={selectedZoneKey}
+                  onPickZone={(key) => setSelectedZoneKey(key)}
+                  onHoverZone={(key) => setActiveZoneKey(key)}
+                />
+              </Suspense>
+            </div>
+
+            <button
+              type="button"
+              className="sessions-toggle glass-surface"
+              data-glass
+              onClick={() => setSessionsOpen((v) => !v)}
+              aria-expanded={sessionsOpen}
+            >
+              🏊 Pool Sessions
+              {dayEvents.length > 0 && <span className="sessions-toggle-count">{dayEvents.length}</span>}
+              <span className={`sessions-toggle-chevron ${sessionsOpen ? "is-open" : ""}`}>▾</span>
+            </button>
+
+            {sessionsOpen && (
+              <>
+                <div className="sessions-overlay" onClick={() => setSessionsOpen(false)} />
+                <ul className="zone-cards sessions-panel glass-surface" data-glass>
+                  {zones.map((zone) => {
+                    const sessions = byZone.get(zone.key) ?? [];
+                    const preview = sessions.slice(0, INLINE_PREVIEW);
+                    const overflow = sessions.length - preview.length;
+                    return (
+                      <li
+                        key={zone.key}
+                        className={`zone-card glass-surface ${selectedZoneKey === zone.key ? "is-selected" : ""}`}
+                        data-glass
+                        onMouseEnter={() => setActiveZoneKey(zone.key)}
+                        onMouseLeave={() => setActiveZoneKey(null)}
+                      >
+                        <div className="zone-card-header">
+                          <span className={`zone-dot ${zone.poolLength === 50 ? "fifty" : zone.poolLength === 25 ? "twentyfive" : "other"}`} />
+                          <h4>{zone.label}</h4>
+                        </div>
+
+                        {sessions.length === 0 ? (
+                          <span className="zone-card-empty">No sessions today</span>
+                        ) : (
+                          <>
+                            <div className="zone-card-chips">
+                              {preview.map((ev) => (
+                                <span key={ev.eventId} className="zone-chip">
+                                  {formatTime(ev.start)} · {isFiftyMeter(ev) ? "50m" : "25m"}
+                                </span>
+                              ))}
+                            </div>
+                            {overflow > 0 ? (
+                              <button
+                                className="zone-card-more"
+                                onClick={() => {
+                                  setSelectedZoneKey(zone.key);
+                                  setSessionsOpen(false);
+                                }}
+                              >
+                                +{overflow} more
+                              </button>
+                            ) : (
+                              <button
+                                className="zone-card-more zone-card-more-ghost"
+                                onClick={() => {
+                                  setSelectedZoneKey(zone.key);
+                                  setSessionsOpen(false);
+                                }}
+                              >
+                                View all
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
           </div>
-
-          <ul className="zone-cards">
-            {zones.map((zone) => {
-              const sessions = byZone.get(zone.key) ?? [];
-              const preview = sessions.slice(0, INLINE_PREVIEW);
-              const overflow = sessions.length - preview.length;
-              return (
-                <li
-                  key={zone.key}
-                  className={`zone-card glass-surface ${selectedZoneKey === zone.key ? "is-selected" : ""}`}
-                  data-glass
-                  onMouseEnter={() => setActiveZoneKey(zone.key)}
-                  onMouseLeave={() => setActiveZoneKey(null)}
-                >
-                  <div className="zone-card-header">
-                    <span className={`zone-dot ${zone.poolLength === 50 ? "fifty" : zone.poolLength === 25 ? "twentyfive" : "other"}`} />
-                    <h4>{zone.label}</h4>
-                  </div>
-
-                  {sessions.length === 0 ? (
-                    <span className="zone-card-empty">No sessions today</span>
-                  ) : (
-                    <>
-                      <div className="zone-card-chips">
-                        {preview.map((ev) => (
-                          <span key={ev.eventId} className="zone-chip">
-                            {formatTime(ev.start)} · {isFiftyMeter(ev) ? "50m" : "25m"}
-                          </span>
-                        ))}
-                      </div>
-                      {overflow > 0 ? (
-                        <button className="zone-card-more" onClick={() => setSelectedZoneKey(zone.key)}>
-                          +{overflow} more
-                        </button>
-                      ) : (
-                        <button className="zone-card-more zone-card-more-ghost" onClick={() => setSelectedZoneKey(zone.key)}>
-                          View all
-                        </button>
-                      )}
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
         </div>
       )}
 

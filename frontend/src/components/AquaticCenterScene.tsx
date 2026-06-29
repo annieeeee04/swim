@@ -159,6 +159,8 @@ function makeLaneWaterTexture(widthUnits: number, depthUnits: number, tone: "rec
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
@@ -192,6 +194,8 @@ function makeSoftWaterTexture(tone: "leisure" | "hot-tub"): THREE.CanvasTexture 
   ctx.globalAlpha = 1;
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
@@ -321,6 +325,10 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
 
     const scene = new THREE.Scene();
     scene.background = null;
+    // Warm cream fog matching the page background (see index.css --grad-bg)
+    // so the far edges of the building fade into the page instead of
+    // stopping at a hard rectangular silhouette.
+    scene.fog = new THREE.Fog(0xfff3c4, 9, 23);
 
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
     camera.position.copy(DEFAULT_CAM_POS);
@@ -647,14 +655,25 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
         if (t >= 1) transition = null;
       }
 
+      const now = performance.now();
       for (let i = 0; i < zoneMeshesRef.current.length; i++) {
         const mesh = zoneMeshesRef.current[i];
         const mat = mesh.material as THREE.MeshStandardMaterial;
         const isActive = mesh.userData.zoneKey === curActive;
         const base = baseOpacitiesRef.current[i] ?? 0.85;
         mat.opacity = isActive ? Math.min(1, base + 0.1) : base;
+
+        // Running-water feel: slowly drift the water texture (a gentle
+        // current) and bob the surface up and down a touch, each pool out
+        // of phase with the others so it doesn't look mechanically uniform.
+        const phase = i * 1.7;
+        if (mat.map) {
+          mat.map.offset.set(Math.sin(now / 3400 + phase) * 0.025, (now / 9000 + phase * 0.1) % 1);
+        }
         const restY = waterBaseYsRef.current[i] ?? 0.04;
-        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, isActive ? restY + 0.06 : restY, 0.15);
+        const bob = Math.sin(now / 900 + phase) * 0.012;
+        const targetY = (isActive ? restY + 0.06 : restY) + bob;
+        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, targetY, 0.15);
 
         const ripple = rippleMeshesRef.current[i];
         const rippleScale = rippleScalesRef.current[i];
