@@ -64,9 +64,19 @@ function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
     .map(([dayKey, slots]) => [dayKey, [...slots].sort((a, b) => a.start.localeCompare(b.start))]);
 }
 
+const PREVIEW_POSES = ["stand", "swim", "climb"] as const;
+const POSE_LABEL: Record<(typeof PREVIEW_POSES)[number], string> = {
+  stand: "Stand",
+  swim: "Swim",
+  climb: "Climb",
+};
+
 export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [stage, setStage] = useState<Stage>("character");
   const [character, setCharacter] = useState<Character | null>(null);
+  const [previewPose, setPreviewPose] = useState<(typeof PREVIEW_POSES)[number]>("stand");
+  const [previewSize, setPreviewSize] = useState(56);
+  const [motionOn, setMotionOn] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [poolLength, setPoolLength] = useState<25 | 50 | null>(null);
   const [occupiedLanes, setOccupiedLanes] = useState<number[]>([]);
@@ -179,6 +189,53 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
       {stage === "character" && (
         <div className="picker-step">
           <h2>Pick your swimmer</h2>
+
+          <div className="studio-bar glass-surface" data-glass>
+            <div className="studio-group">
+              <span className="studio-label">Pose</span>
+              <div className="pose-seg">
+                {PREVIEW_POSES.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`pose-seg-btn ${previewPose === p ? "active" : ""}`}
+                    onClick={() => setPreviewPose(p)}
+                  >
+                    {POSE_LABEL[p]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="studio-group">
+              <span className="studio-label">Size</span>
+              <input
+                type="range"
+                min={32}
+                max={88}
+                value={previewSize}
+                onChange={(e) => setPreviewSize(Number(e.target.value))}
+                className="size-slider"
+                aria-label="Preview size"
+              />
+              <span className="size-value">{previewSize}</span>
+            </div>
+
+            <div className="studio-group">
+              <span className="studio-label">Motion</span>
+              <label className="motion-toggle">
+                <input
+                  type="checkbox"
+                  checked={motionOn}
+                  onChange={(e) => setMotionOn(e.target.checked)}
+                />
+                <span className="motion-toggle-track">
+                  <span className="motion-toggle-knob" />
+                </span>
+              </label>
+            </div>
+          </div>
+
           <div className="character-grid">
             {CHARACTERS.map((c) => (
               <button
@@ -190,8 +247,11 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                   setStage("slot");
                 }}
               >
-                <SwimmerAvatar character={c} pose="stand" size={48} />
+                <span className={`avatar-wrap ${motionOn ? "avatar-motion" : ""}`}>
+                  <SwimmerAvatar character={c} pose={previewPose} size={previewSize} />
+                </span>
                 <span>{c.name}</span>
+                {!c.modelUrl && <span className="character-card-tag">2D only</span>}
               </button>
             ))}
           </div>
