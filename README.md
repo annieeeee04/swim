@@ -165,3 +165,9 @@ required GitHub secrets/variables) and the design reasoning.
   `FRONTEND_ORIGIN` GitHub Actions variable) is set to the frontend's
   CloudFront HTTPS domain — each side's "origin" is the *other* CloudFront
   distribution's domain, not a raw IP/port.
+- The UBC pm-feed occasionally omits `title`/`facilityName` on individual
+  events. `SwimEvent.title` is typed as nullable on both backend
+  (`isFiftyMeter()` null-checks it) and frontend (`title?: string | null` in
+  `types.ts`) — any new code deriving info from these fields (e.g. 25m/50m
+  detection via `.toLowerCase()`) should guard against `null`/`undefined`
+  rather than assuming the feed always supplies them.
