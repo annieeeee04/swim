@@ -500,16 +500,16 @@
   animation-delay: 0.4s;
 }
 
-/* hover elasticity: lift + grow + selection-style glowing border */
+/* hover: a gentle lift — kept subtle so it's easy on the eyes */
 .character-card:hover {
-  transform: translateY(-6px) scale(1.04);
-  background: rgba(255, 255, 255, 0.52);
-  border-color: rgba(168, 85, 247, 0.45);
-  box-shadow: 0 16px 32px rgba(168, 85, 247, 0.24);
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.44);
+  border-color: rgba(168, 85, 247, 0.28);
+  box-shadow: 0 9px 20px rgba(168, 85, 247, 0.14);
 }
 
 .character-card:active {
-  transform: translateY(-2px) scale(0.99);
+  transform: translateY(0) scale(0.995);
 }
 
 .character-card:focus-visible {
@@ -568,7 +568,7 @@
 }
 
 .character-card:hover .avatar-wrap {
-  transform: scale(1.08) translateY(-2px);
+  transform: scale(1.03);
 }
 
 /* the "Animate" switch re-uses the swim keyframes to preview live motion */
@@ -635,7 +635,7 @@
 }
 
 .character-card:hover::before {
-  opacity: 0.92;
+  opacity: 0.5;
 }
 
 /* animated confirm dock — appears once a swimmer is selected */
