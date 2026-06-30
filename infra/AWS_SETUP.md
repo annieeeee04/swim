@@ -51,7 +51,7 @@ This avoids ever storing an AWS access key/secret in GitHub. One-time setup:
          "Action": "sts:AssumeRoleWithWebIdentity",
          "Condition": {
            "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-           "StringLike": { "token.actions.githubusercontent.com:sub": "repo:OWNER/REPO:ref:refs/heads/main" }
+           "StringLike": { "token.actions.githubusercontent.com:sub": "repo:OWNER/REPO:ref:refs/heads/master" }
          }
        }
      ]
@@ -74,7 +74,7 @@ Settings → Secrets and variables → Actions:
 | `CLOUDFRONT_DISTRIBUTION_ID` | secret | from step 2 |
 | `VITE_API_BASE_URL` | variable | wherever the backend ends up running (e.g. an EC2/ECS URL); used at frontend build time |
 
-Once these exist, every push to `main` that passes the build jobs will sync
+Once these exist, every push to `master` that passes the build jobs will sync
 `frontend/dist/` to S3 and invalidate the CloudFront cache automatically.
 
 ## Local manual deploy (without CI, e.g. to sanity-check the setup)

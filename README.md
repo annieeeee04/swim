@@ -63,7 +63,7 @@ swim/
   long-lived server — see `infra/AWS_SETUP.md` for the one-time AWS setup
   (OIDC role, bucket, distribution) and the reasoning.
 - **CI/CD**: `.github/workflows/ci-cd.yml` builds and lints both apps on
-  every push/PR, then (on `main`) builds + pushes Docker images to GHCR,
+  every push/PR, then (on `master`) builds + pushes Docker images to GHCR,
   redeploys the backend container on EC2 via SSM, and deploys the frontend
   to S3 with a CloudFront invalidation — all in one pipeline, no manual
   steps.
@@ -77,7 +77,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-Runs on `https://d1q6dtl87ueyeb.cloudfront.net` (always — in production this port is never
+Runs on `http://localhost:8080` (always — in production this port is never
 exposed directly to the internet; the CloudFront reverse proxy described
 above is what the browser actually talks to). Endpoints:
 
@@ -110,7 +110,7 @@ npm install
 npm run dev
 ```
 
-Runs on `https://du8yrnvuprbic.cloudfront.net` by default and expects the backend at `https://d1q6dtl87ueyeb.cloudfront.net` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
+Runs on `http://localhost:5173` by default and expects the backend at `http://localhost:8080` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
 
 Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page.
 
@@ -123,24 +123,24 @@ under `backend/data/`):
 docker compose up --build
 ```
 
-Backend at `https://d1q6dtl87ueyeb.cloudfront.net`, frontend at `https://du8yrnvuprbic.cloudfront.net`.
+Backend at `http://localhost:8080`, frontend at `http://localhost:5173`.
 Each app also has its own standalone `Dockerfile` if you only need one.
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` runs on every push/PR to `main`:
+`.github/workflows/ci-cd.yml` runs on every push/PR to `master`:
 
 1. **backend-build** — `mvn package` (JDK 17)
 2. **frontend-build** — `npm ci`, lint, type-check, `npm run build`, uploads
    `dist/` as an artifact
-3. **docker-publish** (main only) — builds both Dockerfiles, pushes to
+3. **docker-publish** (master only) — builds both Dockerfiles, pushes to
    `ghcr.io/<owner>/<repo>/swim-backend` and `swim-frontend`
-4. **deploy-backend-ec2** (main only) — assumes the OIDC role, then uses
+4. **deploy-backend-ec2** (master only) — assumes the OIDC role, then uses
    `aws ssm send-command` to tell the EC2 instance to `docker pull` the new
    backend image and restart the container (no SSH, no stored keys; the
    data directory's permissions are reset on every deploy to avoid an H2
    file-lock crash loop)
-5. **deploy-frontend-s3** (main only) — syncs the built frontend to S3 and
+5. **deploy-frontend-s3** (master only) — syncs the built frontend to S3 and
    invalidates the frontend's CloudFront distribution, authenticating via
    the same OIDC role
 
