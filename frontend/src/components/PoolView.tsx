@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CHARACTERS, type Character } from "../data/characters";
 import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
 import type { SwimEvent, SwimRecord } from "../types";
@@ -187,74 +188,131 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   return (
     <div className="pool-view">
       {stage === "character" && (
-        <div className="picker-step">
+        <div className="picker-step picker-step-roster">
           <h2>Pick your swimmer</h2>
 
-          <div className="studio-bar glass-surface" data-glass>
-            <div className="studio-group">
-              <span className="studio-label">Pose</span>
-              <div className="pose-seg">
-                {PREVIEW_POSES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`pose-seg-btn ${previewPose === p ? "active" : ""}`}
-                    onClick={() => setPreviewPose(p)}
-                  >
-                    {POSE_LABEL[p]}
-                  </button>
-                ))}
+          {/* Premium glass "Swimmer Controller" — floating dock above the roster */}
+          <div className="studio-card glass-surface" data-glass>
+            <span className="studio-card-title">Swimmer Controller</span>
+
+            <div className="studio-card-body">
+              <div className="studio-row">
+                <span className="studio-label">Pose</span>
+                <div className="pose-seg">
+                  {PREVIEW_POSES.map((p) => {
+                    const active = previewPose === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`pose-seg-btn ${active ? "active" : ""}`}
+                        onClick={() => setPreviewPose(p)}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="poseIndicator"
+                            className="pose-seg-indicator"
+                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                          />
+                        )}
+                        <span className="pose-seg-label">{POSE_LABEL[p]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="studio-group">
-              <span className="studio-label">Size</span>
-              <input
-                type="range"
-                min={32}
-                max={88}
-                value={previewSize}
-                onChange={(e) => setPreviewSize(Number(e.target.value))}
-                className="size-slider"
-                aria-label="Preview size"
-              />
-              <span className="size-value">{previewSize}</span>
-            </div>
+              <div className="studio-row studio-row-split">
+                <div className="studio-field">
+                  <span className="studio-label">
+                    Size <em>{previewSize}px</em>
+                  </span>
+                  <input
+                    type="range"
+                    min={32}
+                    max={88}
+                    value={previewSize}
+                    onChange={(e) => setPreviewSize(Number(e.target.value))}
+                    className="size-slider"
+                    aria-label="Preview size"
+                  />
+                </div>
 
-            <div className="studio-group">
-              <span className="studio-label">Motion</span>
-              <label className="motion-toggle">
-                <input
-                  type="checkbox"
-                  checked={motionOn}
-                  onChange={(e) => setMotionOn(e.target.checked)}
-                />
-                <span className="motion-toggle-track">
-                  <span className="motion-toggle-knob" />
-                </span>
-              </label>
+                <button
+                  type="button"
+                  className={`motion-switch ${motionOn ? "on" : ""}`}
+                  onClick={() => setMotionOn((v) => !v)}
+                  aria-pressed={motionOn}
+                >
+                  <span className="motion-switch-label">Animate</span>
+                  <span className="motion-switch-track">
+                    <span className="motion-switch-knob" />
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="character-grid">
-            {CHARACTERS.map((c) => (
-              <button
-                key={c.id}
-                className="character-card glass-surface"
-                data-glass
-                onClick={() => {
-                  setCharacter(c);
-                  setStage("slot");
-                }}
-              >
-                <span className={`avatar-wrap ${motionOn ? "avatar-motion" : ""}`}>
-                  <SwimmerAvatar character={c} pose={previewPose} size={previewSize} />
-                </span>
-                <span>{c.name}</span>
-                {!c.modelUrl && <span className="character-card-tag">2D only</span>}
-              </button>
-            ))}
+            {CHARACTERS.map((c) => {
+              const is2D = !c.modelUrl;
+              const selected = character?.id === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`character-card glass-surface ${is2D ? "is-2d" : ""} ${
+                    selected ? "is-selected" : ""
+                  }`}
+                  data-glass
+                  aria-pressed={selected}
+                  onClick={() => setCharacter(c)}
+                  onDoubleClick={() => {
+                    setCharacter(c);
+                    setStage("slot");
+                  }}
+                >
+                  <span className={`character-badge ${is2D ? "character-badge-2d" : "character-badge-3d"}`}>
+                    {is2D ? "2D only" : "3D"}
+                  </span>
+                  <span className="avatar-stage">
+                    <span className={`avatar-wrap ${motionOn ? "avatar-motion" : ""}`}>
+                      <SwimmerAvatar character={c} pose={previewPose} size={previewSize} />
+                    </span>
+                  </span>
+                  <span className="character-name">{c.name}</span>
+                  {is2D && (
+                    <span className="character-hint" title="No 3D model yet — appears as a 2D swimmer in the pool">
+                      no 3D model yet
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+
+          <AnimatePresence>
+            {character && (
+              <motion.div
+                className="roster-confirm glass-surface"
+                data-glass
+                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              >
+                <span className="roster-confirm-who">
+                  <SwimmerAvatar character={character} pose="stand" size={30} />
+                  <span>
+                    Swim as <strong>{character.name}</strong>
+                  </span>
+                </span>
+                <button type="button" className="length-button" onClick={() => setStage("slot")}>
+                  Choose lane →
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

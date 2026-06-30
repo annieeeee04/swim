@@ -248,60 +248,380 @@
 }
 
 /* =========================================================================
-   Character picker — game-roster cards
+   Character roster — picker layout
+   ========================================================================= */
+
+.picker-step-roster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.picker-step-roster > h2 {
+  justify-content: center;
+}
+
+/* ---- premium glass "Swimmer Controller" dock ----
+   The glass formula: LOW-opacity fill + HIGH blur + a sharp semi-transparent
+   border + a soft lifting shadow. Opacity stays low on purpose so the page
+   gradient and drifting swimmers read through it. */
+.studio-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto 24px;
+  padding: 16px 18px 18px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 14px 44px rgba(31, 38, 135, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+}
+
+.studio-card-title {
+  display: block;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  opacity: 0.58;
+  margin-bottom: 14px;
+}
+
+.studio-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.studio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 18px;
+  padding: 9px 12px;
+}
+
+.studio-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.studio-label em {
+  font-style: normal;
+  opacity: 0.85;
+  margin-left: 3px;
+}
+
+/* ---- elastic sliding pose segment (real Framer Motion layoutId) ----
+   The purple pill is a motion.span rendered inside the active button; when
+   the active tab changes, layoutId makes it physically spring across to the
+   new button rather than fading in/out. */
+.pose-seg {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pose-seg-indicator {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--grad-primary);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+}
+
+.pose-seg-btn {
+  position: relative;
+  flex: 1 1 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--color-ink, #2c2350);
+  transition: color 0.2s ease;
+}
+
+.pose-seg-label {
+  position: relative;
+  z-index: 1;
+}
+
+.pose-seg-btn.active {
+  color: #fff;
+}
+
+/* ---- size slider ---- */
+.studio-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.size-slider {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  accent-color: var(--color-accent, #a855f7);
+  cursor: pointer;
+}
+
+/* ---- motion switch ---- */
+.motion-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.18s ease;
+}
+
+.motion-switch:active {
+  transform: scale(0.96);
+}
+
+.motion-switch.on {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: var(--color-accent-dark, #9333ea);
+}
+
+.motion-switch-track {
+  width: 32px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 2px;
+  transition: background 0.2s ease;
+}
+
+.motion-switch-knob {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.motion-switch.on .motion-switch-track {
+  background: var(--grad-primary);
+}
+
+.motion-switch.on .motion-switch-knob {
+  transform: translateX(16px);
+}
+
+.motion-switch:focus-visible {
+  outline: 2px solid var(--color-accent, #a855f7);
+  outline-offset: 2px;
+}
+
+/* =========================================================================
+   Character roster — high-fidelity interactive cards
    ========================================================================= */
 
 .character-grid {
-  max-width: 460px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 .character-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
   overflow: hidden;
-  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: 22px;
+  padding: 15px 10px 13px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-ink);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.1);
   opacity: 0;
   animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease,
+    border-color 0.22s ease, background 0.22s ease;
 }
 
 .character-card:nth-child(1) {
   animation-delay: 0.05s;
 }
 .character-card:nth-child(2) {
-  animation-delay: 0.13s;
+  animation-delay: 0.12s;
 }
 .character-card:nth-child(3) {
-  animation-delay: 0.21s;
+  animation-delay: 0.19s;
 }
 .character-card:nth-child(4) {
-  animation-delay: 0.29s;
+  animation-delay: 0.26s;
 }
 .character-card:nth-child(5) {
-  animation-delay: 0.37s;
+  animation-delay: 0.33s;
 }
 .character-card:nth-child(6) {
-  animation-delay: 0.45s;
+  animation-delay: 0.4s;
 }
 
-.character-card svg {
-  transition: transform 0.25s ease;
-}
-
-/* Hover is intentionally subtle now — just enough to confirm interactivity
-   without the strong jump/rotate/glow combo that read as too aggressive. */
+/* hover elasticity: lift + grow + selection-style glowing border */
 .character-card:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 18px rgba(168, 85, 247, 0.16);
+  transform: translateY(-6px) scale(1.04);
+  background: rgba(255, 255, 255, 0.52);
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 16px 32px rgba(168, 85, 247, 0.24);
+}
+
+.character-card:active {
+  transform: translateY(-2px) scale(0.99);
+}
+
+.character-card:focus-visible {
+  outline: none;
+  border-color: var(--color-accent, #a855f7);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.28), 0 14px 28px rgba(168, 85, 247, 0.2);
+}
+
+/* selected swimmer: anchored gradient ring + glow so the choice reads clearly */
+.character-card.is-selected {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: transparent;
+  box-shadow: 0 0 0 2.5px rgba(168, 85, 247, 0.55), 0 16px 34px rgba(168, 85, 247, 0.26);
+}
+
+.character-card.is-selected::after {
+  content: "✓";
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  border-radius: 50%;
+  background: var(--grad-primary);
+  box-shadow: 0 3px 8px rgba(236, 72, 153, 0.4);
+}
+
+/* hide the PLAY ribbon once a card is the selected one (the ✓ takes over) */
+.character-card.is-selected::before {
+  opacity: 0;
+}
+
+/* avatar spotlight stage — soft radial well, never clips the swim/climb pose */
+.avatar-stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 92px;
+  border-radius: 18px;
+  background: radial-gradient(
+    62% 60% at 50% 44%,
+    rgba(255, 255, 255, 0.62),
+    rgba(255, 240, 200, 0.16) 68%,
+    transparent
+  );
+}
+
+.avatar-wrap {
+  display: inline-flex;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .character-card:hover .avatar-wrap {
-  transform: scale(1.05);
+  transform: scale(1.08) translateY(-2px);
 }
 
+/* the "Animate" switch re-uses the swim keyframes to preview live motion */
+.avatar-motion {
+  animation: idle-bob 2.8s ease-in-out infinite, swim-pulse 3.4s ease-in-out infinite;
+}
+
+.character-name {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* corner badge: 3D (gradient) vs 2D-only (frosted glass chip) */
+.character-badge {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+
+.character-badge-3d {
+  color: #fff;
+  background: var(--grad-primary);
+  box-shadow: 0 3px 8px rgba(236, 72, 153, 0.35);
+}
+
+.character-badge-2d {
+  color: var(--color-ink, #2c2350);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* tiny constraint hint under 2D-only swimmers (full info via title tooltip) */
+.character-hint {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--color-muted, #8a83a8);
+  opacity: 0.85;
+}
+
+/* PLAY ribbon flies in on hover */
 .character-card::before {
   content: "PLAY";
   position: absolute;
-  top: 8px;
+  top: 9px;
   right: -34px;
   font-size: 8.5px;
   font-weight: 900;
@@ -315,155 +635,46 @@
 }
 
 .character-card:hover::before {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.character-card-tag {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--color-ink, #4b3a2f);
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 999px;
-  padding: 2px 6px;
-  opacity: 0.75;
-}
-
-/* =========================================================================
-   Character studio bar — Pose / Size / Motion controls above the roster
-   ========================================================================= */
-
-.studio-bar {
-  display: flex;
-  flex-wrap: wrap;
+/* animated confirm dock — appears once a swimmer is selected */
+.roster-confirm {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  margin: 0 auto 16px;
-  padding: 10px 18px;
-  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  gap: 14px;
+  margin: 20px auto 0;
+  padding: 9px 9px 9px 16px;
   border-radius: var(--radius-pill);
-  max-width: 460px;
-  box-shadow: 0 8px 20px rgba(168, 85, 247, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 12px 30px rgba(168, 85, 247, 0.18);
 }
 
-.studio-group {
-  display: flex;
+.roster-confirm-who {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.studio-label {
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-ink, #4b3a2f);
-  opacity: 0.65;
+  color: var(--color-ink, #2c2350);
 }
 
-.pose-seg {
-  display: flex;
-  gap: 3px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: var(--radius-pill);
-  padding: 2px;
+.roster-confirm-who strong {
+  color: var(--color-accent-dark, #9333ea);
 }
 
-.pose-seg-btn {
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  color: var(--color-ink, #4b3a2f);
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+/* the confirm CTA shouldn't pulse like the other primary buttons */
+.roster-confirm .length-button {
+  animation: none;
 }
 
-.pose-seg-btn:hover {
-  transform: translateY(-1px);
-}
-
-.pose-seg-btn.active {
-  background: var(--grad-primary);
-  color: #fff;
-}
-
-.size-slider {
-  width: 100px;
-  accent-color: var(--color-accent, #ec4899);
-}
-
-.size-value {
-  font-size: 12px;
-  font-weight: 700;
-  min-width: 1.8em;
-  text-align: right;
-  color: var(--color-ink, #4b3a2f);
-  opacity: 0.8;
-}
-
-.motion-toggle {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-}
-
-.motion-toggle input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.motion-toggle-track {
-  display: inline-flex;
-  align-items: center;
-  width: 34px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.15);
-  padding: 2px;
-  transition: background 0.18s ease;
-}
-
-.motion-toggle-knob {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform 0.18s ease;
-}
-
-.motion-toggle input:checked + .motion-toggle-track {
-  background: var(--grad-primary);
-}
-
-.motion-toggle input:checked + .motion-toggle-track .motion-toggle-knob {
-  transform: translateX(16px);
-}
-
-.motion-toggle input:focus-visible + .motion-toggle-track {
-  outline: 2px solid var(--color-accent, #ec4899);
-  outline-offset: 2px;
-}
-
-.avatar-wrap {
-  display: inline-flex;
-  transition: transform 0.2s ease;
-}
-
-/* Motion toggle re-uses the SwimSchool keyframes so the "Motion" switch
-   visibly animates the previewed avatar — calmer than the old always-on bob. */
-.avatar-motion {
-  animation: idle-bob 2.8s ease-in-out infinite, swim-pulse 3.4s ease-in-out infinite;
+@media (max-width: 520px) {
+  .character-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .studio-row-split {
+    flex-wrap: wrap;
+  }
 }
 
 /* =========================================================================
