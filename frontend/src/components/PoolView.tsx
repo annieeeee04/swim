@@ -37,7 +37,7 @@ function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
   const slotMap = new Map<string, Slot>();
   for (const ev of events) {
     const key = `${ev.start}|${ev.end}`;
-    const length: 25 | 50 = ev.title.toLowerCase().includes("50m") ? 50 : 25;
+    const length: 25 | 50 = (ev.title ?? "").toLowerCase().includes("50m") ? 50 : 25;
     const existing = slotMap.get(key);
     if (existing) {
       if (!existing.lengths.includes(length)) existing.lengths.push(length);
@@ -261,21 +261,10 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             <SwimmerAvatar character={character} pose="stand" size={32} />
             Pick your lane, {character.name}!
           </h2>
-          <p className="pool-meta">
-            🎮 WASD/arrows to walk, Enter to pick — or drag to rotate, scroll/pinch to zoom, tap an open lane below.
-          </p>
+          <p className="pool-meta">Drag to rotate, scroll/pinch to zoom, tap an open lane below.</p>
           <div className="pool-stage pool-stage-big">
             <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
-              <Pool3D
-                activeLane={null}
-                onPickLane={handlePickLane}
-                occupiedLanes={occupiedLanes}
-                roamer={{
-                  modelUrl: character.modelUrl,
-                  modelScale: character.modelScale,
-                  modelRotationY: character.modelRotationY,
-                }}
-              />
+              <Pool3D activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
             </Suspense>
           </div>
           {error && <p className="pool-error">{error}</p>}
