@@ -26,4 +26,39 @@ export interface SwimRecord {
   distanceMeters: number | null;
   startedAt: string;
   completedAt: string | null;
+  userId?: number | null;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  displayName: string;
+  provider: "LOCAL" | "GOOGLE" | "INSTAGRAM";
+  gender: string | null;
+  age: number | null;
+  avatarSkin: string | null;
+  avatarSuit: string | null;
+  avatarCap: string | null;
+  avatarBase: string | null;
+  /** Uploaded profile photo (data URL). Records/leaderboard only — never in-pool. */
+  photoUrl: string | null;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: number | null;
+  displayName: string;
+  photoUrl: string | null;
+  avatarSkin: string;
+  avatarSuit: string;
+  avatarCap: string;
+  totalMeters: number;
+  swims: number;
+  best: number;
+  demo: boolean;
 }

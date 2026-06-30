@@ -1,12 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchSwimHistory } from "../api";
-import { CHARACTERS } from "../data/characters";
+import { CHARACTERS, type Character } from "../data/characters";
+import { useAuth } from "../auth/AuthContext";
 import SwimmerAvatar from "./SwimmerAvatar";
 import SwimSchool from "./SwimSchool";
-import type { SwimRecord } from "../types";
+import type { SwimRecord, User } from "../types";
 
 function characterFor(id: string) {
   return CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
+}
+
+/** The avatar shown for a record: the user's own look for their swims,
+ *  otherwise the roster character that was used. */
+function displayCharacterFor(record: SwimRecord, user: User | null): Character {
+  if (user && record.userId === user.id) {
+    return {
+      id: `me-${user.id}`,
+      name: user.displayName,
+      skin: user.avatarSkin ?? "#f3c89e",
+      suit: user.avatarSuit ?? "#ec4899",
+      cap: user.avatarCap ?? "#a855f7",
+      modelUrl: "",
+    };
+  }
+  return characterFor(record.character);
 }
 
 function formatDateTime(iso: string): string {
@@ -29,6 +46,7 @@ function formatDuration(startedAt: string, completedAt: string | null): string {
 }
 
 export default function RecordsView() {
+  const { user } = useAuth();
   const [records, setRecords] = useState<SwimRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +151,7 @@ export default function RecordsView() {
           ) : (
             <div className="records-grid">
               {records.map((r) => {
-                const character = characterFor(r.character);
+                const character = displayCharacterFor(r, user);
                 const done = r.completedAt != null;
                 return (
                   <div key={r.id} className="record-card glass-panel" data-glass>

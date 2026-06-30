@@ -33,6 +33,10 @@ public class SwimRecord {
     @Column(nullable = false)
     private int lane;
 
+    /** Owner of this swim, if logged in. Null for anonymous/legacy swims. */
+    @Column
+    private Long userId;
+
     /** Distance the user actually swam, in meters. Null until they finish and report it. */
     @Column
     private Double distanceMeters;
@@ -83,6 +87,14 @@ public class SwimRecord {
 
     public void setLane(int lane) {
         this.lane = lane;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public Double getDistanceMeters() {

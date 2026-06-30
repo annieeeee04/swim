@@ -1,13 +1,17 @@
 package com.annie.swim.controller;
 
 import com.annie.swim.model.SwimRecord;
+import com.annie.swim.model.User;
 import com.annie.swim.repository.SwimRecordRepository;
+import com.annie.swim.service.AuthService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,9 +31,11 @@ public class SwimRecordController {
     private static final int TOTAL_LANES = 10;
 
     private final SwimRecordRepository repository;
+    private final AuthService auth;
 
-    public SwimRecordController(SwimRecordRepository repository) {
+    public SwimRecordController(SwimRecordRepository repository, AuthService auth) {
         this.repository = repository;
+        this.auth = auth;
     }
 
     /** Full swim history, most recent first. */
@@ -53,7 +59,9 @@ public class SwimRecordController {
      * otherwise the first free lane (1-10) is assigned automatically.
      */
     @PostMapping
-    public SwimRecord start(@RequestBody StartRequest request) {
+    public SwimRecord start(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @RequestBody StartRequest request) {
         if (request.character() == null || request.character().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "character is required");
         }
@@ -79,6 +87,10 @@ public class SwimRecordController {
         }
 
         SwimRecord record = new SwimRecord(request.character(), request.poolLength(), lane);
+        User user = auth.optionalUser(authHeader);
+        if (user != null) {
+            record.setUserId(user.getId());
+        }
         return repository.save(record);
     }
 

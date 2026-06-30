@@ -608,6 +608,22 @@
   -webkit-backdrop-filter: blur(6px);
 }
 
+.character-badge-you {
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+  box-shadow: 0 3px 8px rgba(20, 184, 166, 0.35);
+}
+
+/* the user's own avatar card gets a calm teal anchor so it reads as "you" */
+.character-card.is-you {
+  border-color: rgba(20, 184, 166, 0.45);
+  background: rgba(236, 253, 245, 0.5);
+}
+
+.character-card.is-you .avatar-stage {
+  background: radial-gradient(62% 60% at 50% 44%, rgba(20, 184, 166, 0.16), transparent 70%);
+}
+
 /* tiny constraint hint under 2D-only swimmers (full info via title tooltip) */
 .character-hint {
   font-size: 8.5px;

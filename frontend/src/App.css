@@ -4,6 +4,82 @@
   padding: 28px 20px 60px;
 }
 
+/* auth-resolving splash between intro and the app */
+.app-booting {
+  position: relative;
+  z-index: 1;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.app-booting svg {
+  animation: idle-bob 1.6s ease-in-out infinite;
+}
+
+/* header account chip */
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: var(--shadow-card);
+}
+
+.user-chip-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #faf0fe;
+  flex-shrink: 0;
+}
+
+.user-chip-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-chip-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-ink);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-chip-logout {
+  border: none;
+  background: rgba(168, 85, 247, 0.12);
+  color: var(--color-accent-dark);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.user-chip-logout:hover {
+  background: rgba(236, 72, 153, 0.18);
+  transform: scale(1.08);
+}
+
 .app-header {
   display: flex;
   align-items: center;

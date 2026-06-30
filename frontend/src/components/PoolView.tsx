@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CHARACTERS, type Character } from "../data/characters";
 import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
-import type { SwimEvent, SwimRecord } from "../types";
+import type { SwimEvent, SwimRecord, User } from "../types";
 import { formatDayHeading, formatTime } from "../utils/time";
 import type { SwimmerPose3D } from "./Pool3D";
 import SwimmerAvatar from "./SwimmerAvatar";
@@ -72,7 +72,7 @@ const POSE_LABEL: Record<(typeof PREVIEW_POSES)[number], string> = {
   climb: "Climb",
 };
 
-export default function PoolView({ events }: { events: SwimEvent[] }) {
+export default function PoolView({ events, user }: { events: SwimEvent[]; user?: User | null }) {
   const [stage, setStage] = useState<Stage>("character");
   const [character, setCharacter] = useState<Character | null>(null);
   const [previewPose, setPreviewPose] = useState<(typeof PREVIEW_POSES)[number]>("stand");
@@ -88,6 +88,27 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [error, setError] = useState<string | null>(null);
 
   const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
+
+  // The logged-in user's own avatar becomes the first, pre-eminent swimmer in
+  // the roster — this is the avatar that actually enters the pool for them.
+  const youCharacter = useMemo<Character | null>(
+    () =>
+      user
+        ? {
+            id: `me-${user.id}`,
+            name: "You",
+            skin: user.avatarSkin ?? "#f3c89e",
+            suit: user.avatarSuit ?? "#ec4899",
+            cap: user.avatarCap ?? "#a855f7",
+            modelUrl: "",
+          }
+        : null,
+    [user],
+  );
+  const roster = useMemo(
+    () => (youCharacter ? [youCharacter, ...CHARACTERS] : CHARACTERS),
+    [youCharacter],
+  );
 
   // Entering the lane-picking stage: find out which lanes are already taken.
   useEffect(() => {
@@ -254,16 +275,22 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
           </div>
 
           <div className="character-grid">
-            {CHARACTERS.map((c) => {
+            {roster.map((c) => {
+              const isYou = youCharacter?.id === c.id;
               const is2D = !c.modelUrl;
               const selected = character?.id === c.id;
+              const badgeClass = isYou
+                ? "character-badge-you"
+                : is2D
+                  ? "character-badge-2d"
+                  : "character-badge-3d";
               return (
                 <button
                   key={c.id}
                   type="button"
-                  className={`character-card glass-surface ${is2D ? "is-2d" : ""} ${
-                    selected ? "is-selected" : ""
-                  }`}
+                  className={`character-card glass-surface ${isYou ? "is-you" : ""} ${
+                    is2D ? "is-2d" : ""
+                  } ${selected ? "is-selected" : ""}`}
                   data-glass
                   aria-pressed={selected}
                   onClick={() => setCharacter(c)}
@@ -272,16 +299,16 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                     setStage("slot");
                   }}
                 >
-                  <span className={`character-badge ${is2D ? "character-badge-2d" : "character-badge-3d"}`}>
-                    {is2D ? "2D only" : "3D"}
+                  <span className={`character-badge ${badgeClass}`}>
+                    {isYou ? "you" : is2D ? "2D only" : "3D"}
                   </span>
                   <span className="avatar-stage">
                     <span className={`avatar-wrap ${motionOn ? "avatar-motion" : ""}`}>
                       <SwimmerAvatar character={c} pose={previewPose} size={previewSize} />
                     </span>
                   </span>
-                  <span className="character-name">{c.name}</span>
-                  {is2D && (
+                  <span className="character-name">{isYou ? user?.displayName ?? "You" : c.name}</span>
+                  {is2D && !isYou && (
                     <span className="character-hint" title="No 3D model yet — appears as a 2D swimmer in the pool">
                       no 3D model yet
                     </span>
