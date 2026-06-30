@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import SwimSchool from "./SwimSchool";
 
 /**
  * Landing/intro screen shown before the main Schedule/Pool/Records app.
@@ -33,6 +34,7 @@ export default function IntroPage({ onStart }: { onStart: () => void }) {
           <span />
           <span />
         </div>
+        <SwimSchool count={6} seed={5} className="intro-school" />
       </div>
 
       <div className="intro-content">

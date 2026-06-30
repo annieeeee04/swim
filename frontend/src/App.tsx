@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+import "./arcade.css";
 import "./components/PoolView.css";
 import "./components/RecordsView.css";
 import "./components/IntroPage.css";
@@ -10,6 +11,7 @@ import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
 import RecordsView from "./components/RecordsView";
 import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
+import SwimSchool from "./components/SwimSchool";
 import type { PoolFilter, SwimEvent } from "./types";
 
 type Tab = "schedule" | "pool" | "records";
@@ -77,9 +79,12 @@ function App() {
   return (
     <div className="app">
       <FluidCursor />
+      <SwimSchool count={7} seed={21} fixed className="app-bg-school" />
       <header className="app-header glass-surface" data-glass>
         <div className="brand">
-          <h1>🏊 UBC Length Swim</h1>
+          <h1>
+            <span className="brand-emoji">🏊</span> UBC Length Swim
+          </h1>
           <p className="tagline">Schedule + Pool Tracker</p>
         </div>
         {tab === "schedule" && (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchSwimHistory } from "../api";
 import { CHARACTERS } from "../data/characters";
 import SwimmerAvatar from "./SwimmerAvatar";
+import SwimSchool from "./SwimSchool";
 import type { SwimRecord } from "../types";
 
 function characterFor(id: string) {
@@ -87,6 +88,7 @@ export default function RecordsView() {
       <div className="records-blob records-blob-a" aria-hidden="true" />
       <div className="records-blob records-blob-b" aria-hidden="true" />
       <div className="records-blob records-blob-c" aria-hidden="true" />
+      <SwimSchool count={5} seed={42} className="records-school" />
 
       <div className="records-hero glass-panel" data-glass>
         <p className="records-eyebrow">Your Lane, Your Legacy</p>

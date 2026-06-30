@@ -5,6 +5,7 @@ import type { SwimEvent, SwimRecord } from "../types";
 import { formatDayHeading, formatTime } from "../utils/time";
 import type { SwimmerPose3D } from "./Pool3D";
 import SwimmerAvatar from "./SwimmerAvatar";
+import SwimSchool from "./SwimSchool";
 
 // Three.js is heavy, so the 3D pool scene is its own lazy-loaded chunk —
 // it only downloads once someone actually opens the Pool tab.
@@ -264,19 +265,22 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
           <p className="pool-meta">
             🎮 WASD/arrows to walk, Enter to pick — or drag to rotate, scroll/pinch to zoom, tap an open lane below.
           </p>
-          <div className="pool-stage pool-stage-big">
-            <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
-              <Pool3D
-                activeLane={null}
-                onPickLane={handlePickLane}
-                occupiedLanes={occupiedLanes}
-                roamer={{
-                  modelUrl: character.modelUrl,
-                  modelScale: character.modelScale,
-                  modelRotationY: character.modelRotationY,
-                }}
-              />
-            </Suspense>
+          <div className="pool-arena">
+            <SwimSchool count={4} seed={11} className="pool-school" />
+            <div className="pool-stage pool-stage-big">
+              <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
+                <Pool3D
+                  activeLane={null}
+                  onPickLane={handlePickLane}
+                  occupiedLanes={occupiedLanes}
+                  roamer={{
+                    modelUrl: character.modelUrl,
+                    modelScale: character.modelScale,
+                    modelRotationY: character.modelRotationY,
+                  }}
+                />
+              </Suspense>
+            </div>
           </div>
           {error && <p className="pool-error">{error}</p>}
         </div>
@@ -298,6 +302,7 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                 </>
               )}
             </p>
+            <SwimSchool count={4} seed={29} className="pool-school" />
             <div className="pool-stage pool-stage-big">
               <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
                 <Pool3D
