@@ -10,6 +10,7 @@ interface Droplet {
   hue: string;
 }
 
+// Mirrors --fluid-pink/--fluid-purple/--fluid-blue/--fluid-gold in index.css.
 const HUES = ["236, 72, 153", "168, 85, 247", "77, 171, 247", "255, 214, 102"];
 
 /**

@@ -11,9 +11,46 @@
   --color-accent-dark: #9333ea;
   --color-pink: #ec4899;
   --shadow-card: 0 8px 24px rgba(168, 85, 247, 0.08), 0 1px 3px rgba(44, 35, 80, 0.04);
+  --shadow-lift: 0 10px 24px rgba(168, 85, 247, 0.18);
+  --shadow-primary: 0 6px 16px rgba(236, 72, 153, 0.35);
   --radius-card: 20px;
   --radius-pill: 999px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-hero: 28px;
   --glass-shine-size: 240px;
+
+  /* Pool-length coding */
+  --pool-25m: #38bdf8;
+  --pool-50m: #a855f7;
+  --pool-other: #14b8a6;
+
+  /* Semantic */
+  --color-success: #0f9b6c;
+  --color-success-bg: rgba(32, 201, 151, 0.18);
+  --color-live: var(--color-pink);
+  --color-live-bg: rgba(236, 72, 153, 0.16);
+  --color-warning: #b45309;
+  --color-warning-bg: #fff7ed;
+  --color-warning-border: #fed7aa;
+
+  /* Fluid cursor hues (rgb triples, for canvas gradients) */
+  --fluid-pink: 236, 72, 153;
+  --fluid-purple: 168, 85, 247;
+  --fluid-blue: 77, 171, 247;
+  --fluid-gold: 255, 214, 102;
+
+  /* Spacing scale (~8px-led rhythm) */
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 20px;
+  --space-5: 28px;
+  --space-6: 44px;
+
+  --font-display: "Quicksand", "Nunito", sans-serif;
+  --font-body: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * {

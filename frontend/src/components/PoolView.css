@@ -121,7 +121,7 @@
 }
 
 .pool-error {
-  color: #b45309;
+  color: var(--color-warning);
   font-size: 13px;
   margin-top: 8px;
 }
