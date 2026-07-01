@@ -1,0 +1,478 @@
+.aquatic-schedule {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4px 4px 40px;
+}
+
+.day-calendar {
+  position: relative;
+  display: inline-block;
+  margin: 0 0 16px;
+}
+
+.day-calendar-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+
+.day-calendar-trigger-icon {
+  font-size: 14px;
+}
+
+.day-calendar-chevron {
+  font-size: 11px;
+  color: var(--color-muted);
+  transition: transform 0.15s ease;
+}
+
+.day-calendar-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.day-calendar-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: 260px;
+  border-radius: var(--radius-card);
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.day-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.day-calendar-nav-btn {
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-ink);
+  line-height: 1;
+}
+
+.day-calendar-month {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.day-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+
+.day-calendar-weekdays span {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.day-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 4px;
+}
+
+.day-calendar-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.day-calendar-cell.is-empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.day-calendar-cell.is-disabled {
+  color: var(--color-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.day-calendar-cell.has-sessions {
+  background: rgba(236, 72, 153, 0.12);
+  font-weight: 700;
+}
+
+.day-calendar-cell.is-today:not(.is-active) {
+  box-shadow: inset 0 0 0 1.5px var(--color-accent);
+}
+
+.day-calendar-cell.is-active {
+  background: var(--grad-primary);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(236, 72, 153, 0.4);
+}
+
+.aquatic-layout {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.aquatic-stage-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.aquatic-stage {
+  position: relative;
+  width: 100%;
+  height: min(78vh, 640px);
+  min-height: 460px;
+  background: radial-gradient(ellipse 92% 88% at 50% 48%, rgba(207, 234, 255, 0.5) 0%, transparent 88%);
+  -webkit-mask-image: radial-gradient(ellipse 96% 92% at 50% 48%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 96% 92% at 50% 48%, #000 55%, transparent 100%);
+}
+
+.aquatic-scene-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.aquatic-scene-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .stage-hint {
+    display: none;
+  }
+}
+
+.sessions-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+
+.sessions-toggle-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--grad-primary);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.sessions-toggle-chevron {
+  font-size: 11px;
+  color: var(--color-muted);
+  transition: transform 0.15s ease;
+}
+
+.sessions-toggle-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.sessions-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  background: transparent;
+}
+
+.zone-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sessions-panel {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  z-index: 25;
+  width: min(340px, calc(100% - 28px));
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  animation: zone-panel-in 0.22s ease;
+}
+
+.zone-card {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow 0.15s ease;
+}
+
+.zone-card.is-selected {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.zone-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zone-card-header h4 {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-ink);
+}
+
+.zone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.zone-dot.twentyfive {
+  background: #38bdf8;
+}
+
+.zone-dot.fifty {
+  background: #a855f7;
+}
+
+.zone-dot.other {
+  background: #14b8a6;
+}
+
+.zone-card-empty {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.zone-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.zone-chip {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  background: #faf0fe;
+  border-radius: 8px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.zone-card-more {
+  align-self: flex-start;
+  border: none;
+  background: var(--grad-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.zone-card-more-ghost {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-ink);
+}
+
+.zone-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 35, 80, 0.28);
+  z-index: 30;
+}
+
+.zone-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 92vw);
+  z-index: 31;
+  border-radius: 0;
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  box-shadow: -10px 0 30px rgba(44, 35, 80, 0.18);
+  animation: zone-panel-in 0.28s ease;
+}
+
+@keyframes zone-panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.zone-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zone-panel-header h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--color-ink);
+}
+
+.zone-panel-day {
+  margin: -8px 0 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+}
+
+.zone-panel-close {
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.zone-panel-empty {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.zone-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-panel-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 12.5px;
+}
+
+.zone-panel-time {
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.zone-panel-pool {
+  color: var(--color-muted);
+}
+
+.zone-panel-length {
+  font-size: 11px;
+  font-weight: 700;
+  background: #faf0fe;
+  color: var(--color-accent-dark);
+  border-radius: 8px;
+  padding: 2px 8px;
+  margin-left: auto;
+}
+
+.zone-panel-book {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
+  .aquatic-stage {
+    height: 60vh;
+    min-height: 320px;
+  }
+
+  .sessions-panel {
+    top: 56px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}

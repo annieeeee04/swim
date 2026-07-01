@@ -155,10 +155,10 @@
 .pool3d-canvas {
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-card);
   overflow: hidden;
-  box-shadow: var(--shadow-card);
-  background: linear-gradient(180deg, #eaf6ff 0%, #cfeaff 100%);
+  background: radial-gradient(ellipse 70% 65% at 50% 48%, rgba(207, 234, 255, 0.55) 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 68% at 50% 48%, #000 62%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 68% at 50% 48%, #000 62%, transparent 100%);
 }
 
 .pool3d-canvas canvas {
@@ -175,8 +175,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-card);
-  background: linear-gradient(180deg, #eaf6ff 0%, #cfeaff 100%);
   color: var(--color-muted);
   font-weight: 600;
   font-size: 13.5px;

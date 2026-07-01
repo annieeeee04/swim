@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   REGISTRY: ghcr.io
@@ -70,7 +70,7 @@ jobs:
   docker-publish:
     name: Build & push Docker images
     needs: [backend-build, frontend-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -108,7 +108,7 @@ jobs:
   deploy-backend-ec2:
     name: Deploy backend to EC2
     needs: [docker-publish]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -167,7 +167,7 @@ jobs:
   deploy-frontend-s3:
     name: Deploy frontend to S3 + CloudFront
     needs: [frontend-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read

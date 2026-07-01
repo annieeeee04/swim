@@ -1,6 +1,6 @@
 export interface SwimEvent {
   eventId: string;
-  title: string;
+  title?: string | null;
   serviceName: string;
   facilityName: string;
   facilityType?: string | null;
