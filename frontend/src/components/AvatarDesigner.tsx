@@ -25,6 +25,8 @@ function Swatches({
   active: string;
   onPick: (c: string) => void;
 }) {
+  // Defensive: never call string methods on a possibly-missing color.
+  const activeColor = (active ?? "").toLowerCase();
   return (
     <div className="designer-row">
       <span className="designer-label">{label}</span>
@@ -33,7 +35,7 @@ function Swatches({
           <button
             key={c}
             type="button"
-            className={`designer-swatch ${active.toLowerCase() === c.toLowerCase() ? "active" : ""}`}
+            className={`designer-swatch ${activeColor === c.toLowerCase() ? "active" : ""}`}
             style={{ background: c }}
             onClick={() => onPick(c)}
             aria-label={`${label} ${c}`}

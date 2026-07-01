@@ -47,7 +47,9 @@ export function generateAvatar(gender: string, age: number | null): AvatarLook {
   const family = FAMILIES[(genderBias + (seed % FAMILIES.length)) % FAMILIES.length];
 
   // Age picks a skin tone deterministically (just for variety, not literal).
-  const skin = SKIN_TONES[(seed >> 3) % SKIN_TONES.length];
+  // NOTE: use the UNSIGNED shift (>>>) — a signed >> can go negative for large
+  // seeds, yielding a negative index and an undefined skin tone.
+  const skin = SKIN_TONES[(seed >>> 3) % SKIN_TONES.length];
 
   return { skin, suit: family.suit, cap: family.cap, base: family.id };
 }
