@@ -35,7 +35,7 @@ export interface User {
   id: number;
   email: string;
   displayName: string;
-  provider: "LOCAL" | "GOOGLE" | "INSTAGRAM";
+  provider: "LOCAL" | "GOOGLE" | "FACEBOOK";
   gender: string | null;
   age: number | null;
   avatarSkin: string | null;

@@ -193,8 +193,8 @@ export async function uploadPhoto(dataUrl: string | null): Promise<User> {
   return res.json();
 }
 
-/** Asks the backend for a provider authorize URL (Google / Instagram). */
-export async function fetchOAuthUrl(provider: "google" | "instagram"): Promise<string> {
+/** Asks the backend for a provider authorize URL (Google / Facebook). */
+export async function fetchOAuthUrl(provider: "google" | "facebook"): Promise<string> {
   const res = await fetch(`${API_BASE}/api/auth/oauth/${provider}/url`);
   if (!res.ok) {
     if (res.status === 501) {
