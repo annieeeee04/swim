@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+import "./arcade.css";
 import "./components/PoolView.css";
 import "./components/RecordsView.css";
 import "./components/IntroPage.css";
 import "./components/AquaticCenterSchedule.css";
+import "./components/AuthScreen.css";
+import "./components/Leaderboard.css";
 import { fetchSchedule, refreshSchedule } from "./api";
+import { useAuth } from "./auth/AuthContext";
 import PoolView from "./components/PoolView";
 import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
 import RecordsView from "./components/RecordsView";
+import Leaderboard from "./components/Leaderboard";
 import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
-import type { PoolFilter, SwimEvent } from "./types";
+import AuthScreen from "./components/AuthScreen";
+import SwimSchool from "./components/SwimSchool";
+import SwimmerAvatar from "./components/SwimmerAvatar";
+import type { Character } from "./data/characters";
+import type { PoolFilter, SwimEvent, User } from "./types";
 
-type Tab = "schedule" | "pool" | "records";
+type Tab = "schedule" | "pool" | "records" | "ranking";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -20,7 +29,20 @@ const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "50m", label: "50m only" },
 ];
 
+/** The user's chosen avatar colors as a Character for the 2D SwimmerAvatar. */
+function userCharacter(user: User): Character {
+  return {
+    id: `me-${user.id}`,
+    name: user.displayName,
+    skin: user.avatarSkin ?? "#f3c89e",
+    suit: user.avatarSuit ?? "#ec4899",
+    cap: user.avatarCap ?? "#a855f7",
+    modelUrl: "",
+  };
+}
+
 function App() {
+  const { user, loading: authLoading, logout } = useAuth();
   const [started, setStarted] = useState(false);
   const [tab, setTab] = useState<Tab>("schedule");
   const [events, setEvents] = useState<SwimEvent[]>([]);
@@ -65,6 +87,13 @@ function App() {
     load();
   }, [load]);
 
+  // A social-login redirect lands back with a token already in hand, so skip
+  // the intro and go straight in once the session resolves.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (user && !started) setStarted(true);
+  }, [user, started]);
+
   if (!started) {
     return (
       <>
@@ -74,24 +103,57 @@ function App() {
     );
   }
 
+  // After "Start", you must be signed in to use the app.
+  if (authLoading) {
+    return (
+      <>
+        <FluidCursor />
+        <div className="app-booting">
+          <SwimmerAvatar
+            character={{ id: "load", name: "", skin: "#f3c89e", suit: "#a855f7", cap: "#6d28d9", modelUrl: "" }}
+            pose="swim"
+            size={64}
+          />
+          <p>Warming up the pool…</p>
+        </div>
+      </>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <FluidCursor />
+        <AuthScreen />
+      </>
+    );
+  }
+
   return (
     <div className="app">
       <FluidCursor />
+      <SwimSchool count={7} seed={21} fixed className="app-bg-school" />
       <header className="app-header glass-surface" data-glass>
         <div className="brand">
-          <h1>🏊 UBC Length Swim</h1>
+          <h1>
+            <span className="brand-emoji">🏊</span> UBC Length Swim
+          </h1>
           <p className="tagline">Schedule + Pool Tracker</p>
         </div>
-        {tab === "schedule" && (
-          <button
-            className="refresh-button glass-surface"
-            data-glass
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            {refreshing ? "Refreshing…" : "↻ Refresh"}
+
+        <div className="user-chip">
+          <span className="user-chip-avatar">
+            {user.photoUrl ? (
+              <img src={user.photoUrl} alt="" />
+            ) : (
+              <SwimmerAvatar character={userCharacter(user)} pose="stand" size={26} />
+            )}
+          </span>
+          <span className="user-chip-name">{user.displayName}</span>
+          <button className="user-chip-logout" onClick={() => logout()} title="Sign out">
+            ⏻
           </button>
-        )}
+        </div>
       </header>
 
       <div className="tabs glass-surface" data-glass>
@@ -103,6 +165,12 @@ function App() {
         </button>
         <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
           Pool
+        </button>
+        <button
+          className={`tab ${tab === "ranking" ? "active" : ""}`}
+          onClick={() => setTab("ranking")}
+        >
+          Ranking
         </button>
         <button
           className={`tab ${tab === "records" ? "active" : ""}`}
@@ -129,6 +197,14 @@ function App() {
                 {f.label}
               </button>
             ))}
+            <button
+              className="refresh-button glass-surface"
+              data-glass
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? "Refreshing…" : "↻ Refresh"}
+            </button>
           </div>
 
           {loading && <p className="empty-state">Loading schedule…</p>}
@@ -137,7 +213,9 @@ function App() {
         </>
       )}
 
-      {tab === "pool" && <PoolView events={events} />}
+      {tab === "pool" && <PoolView events={events} user={user} />}
+
+      {tab === "ranking" && <Leaderboard />}
 
       {tab === "records" && <RecordsView />}
     </div>

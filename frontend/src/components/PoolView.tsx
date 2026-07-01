@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CHARACTERS, type Character } from "../data/characters";
 import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
-import type { SwimEvent, SwimRecord } from "../types";
+import type { SwimEvent, SwimRecord, User } from "../types";
 import { formatDayHeading, formatTime } from "../utils/time";
 import type { SwimmerPose3D } from "./Pool3D";
 import SwimmerAvatar from "./SwimmerAvatar";
+import SwimSchool from "./SwimSchool";
 
 // Three.js is heavy, so the 3D pool scene is its own lazy-loaded chunk —
 // it only downloads once someone actually opens the Pool tab.
@@ -63,9 +65,19 @@ function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
     .map(([dayKey, slots]) => [dayKey, [...slots].sort((a, b) => a.start.localeCompare(b.start))]);
 }
 
-export default function PoolView({ events }: { events: SwimEvent[] }) {
+const PREVIEW_POSES = ["stand", "swim", "climb"] as const;
+const POSE_LABEL: Record<(typeof PREVIEW_POSES)[number], string> = {
+  stand: "Stand",
+  swim: "Swim",
+  climb: "Climb",
+};
+
+export default function PoolView({ events, user }: { events: SwimEvent[]; user?: User | null }) {
   const [stage, setStage] = useState<Stage>("character");
   const [character, setCharacter] = useState<Character | null>(null);
+  const [previewPose, setPreviewPose] = useState<(typeof PREVIEW_POSES)[number]>("stand");
+  const [previewSize, setPreviewSize] = useState(56);
+  const [motionOn, setMotionOn] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [poolLength, setPoolLength] = useState<25 | 50 | null>(null);
   const [occupiedLanes, setOccupiedLanes] = useState<number[]>([]);
@@ -76,6 +88,27 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   const [error, setError] = useState<string | null>(null);
 
   const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
+
+  // The logged-in user's own avatar becomes the first, pre-eminent swimmer in
+  // the roster — this is the avatar that actually enters the pool for them.
+  const youCharacter = useMemo<Character | null>(
+    () =>
+      user
+        ? {
+            id: `me-${user.id}`,
+            name: "You",
+            skin: user.avatarSkin ?? "#f3c89e",
+            suit: user.avatarSuit ?? "#ec4899",
+            cap: user.avatarCap ?? "#a855f7",
+            modelUrl: "",
+          }
+        : null,
+    [user],
+  );
+  const roster = useMemo(
+    () => (youCharacter ? [youCharacter, ...CHARACTERS] : CHARACTERS),
+    [youCharacter],
+  );
 
   // Entering the lane-picking stage: find out which lanes are already taken.
   useEffect(() => {
@@ -176,24 +209,137 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
   return (
     <div className="pool-view">
       {stage === "character" && (
-        <div className="picker-step">
+        <div className="picker-step picker-step-roster">
           <h2>Pick your swimmer</h2>
-          <div className="character-grid">
-            {CHARACTERS.map((c) => (
-              <button
-                key={c.id}
-                className="character-card glass-surface"
-                data-glass
-                onClick={() => {
-                  setCharacter(c);
-                  setStage("slot");
-                }}
-              >
-                <SwimmerAvatar character={c} pose="stand" size={48} />
-                <span>{c.name}</span>
-              </button>
-            ))}
+
+          {/* Premium glass "Swimmer Controller" — floating dock above the roster */}
+          <div className="studio-card glass-surface" data-glass>
+            <span className="studio-card-title">Swimmer Controller</span>
+
+            <div className="studio-card-body">
+              <div className="studio-row">
+                <span className="studio-label">Pose</span>
+                <div className="pose-seg">
+                  {PREVIEW_POSES.map((p) => {
+                    const active = previewPose === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`pose-seg-btn ${active ? "active" : ""}`}
+                        onClick={() => setPreviewPose(p)}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="poseIndicator"
+                            className="pose-seg-indicator"
+                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                          />
+                        )}
+                        <span className="pose-seg-label">{POSE_LABEL[p]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="studio-row studio-row-split">
+                <div className="studio-field">
+                  <span className="studio-label">
+                    Size <em>{previewSize}px</em>
+                  </span>
+                  <input
+                    type="range"
+                    min={32}
+                    max={88}
+                    value={previewSize}
+                    onChange={(e) => setPreviewSize(Number(e.target.value))}
+                    className="size-slider"
+                    aria-label="Preview size"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className={`motion-switch ${motionOn ? "on" : ""}`}
+                  onClick={() => setMotionOn((v) => !v)}
+                  aria-pressed={motionOn}
+                >
+                  <span className="motion-switch-label">Animate</span>
+                  <span className="motion-switch-track">
+                    <span className="motion-switch-knob" />
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
+
+          <div className="character-grid">
+            {roster.map((c) => {
+              const isYou = youCharacter?.id === c.id;
+              const is2D = !c.modelUrl;
+              const selected = character?.id === c.id;
+              const badgeClass = isYou
+                ? "character-badge-you"
+                : is2D
+                  ? "character-badge-2d"
+                  : "character-badge-3d";
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`character-card glass-surface ${isYou ? "is-you" : ""} ${
+                    is2D ? "is-2d" : ""
+                  } ${selected ? "is-selected" : ""}`}
+                  data-glass
+                  aria-pressed={selected}
+                  onClick={() => setCharacter(c)}
+                  onDoubleClick={() => {
+                    setCharacter(c);
+                    setStage("slot");
+                  }}
+                >
+                  <span className={`character-badge ${badgeClass}`}>
+                    {isYou ? "you" : is2D ? "2D only" : "3D"}
+                  </span>
+                  <span className="avatar-stage">
+                    <span className={`avatar-wrap ${motionOn ? "avatar-motion" : ""}`}>
+                      <SwimmerAvatar character={c} pose={previewPose} size={previewSize} />
+                    </span>
+                  </span>
+                  <span className="character-name">{isYou ? user?.displayName ?? "You" : c.name}</span>
+                  {is2D && !isYou && (
+                    <span className="character-hint" title="No 3D model yet — appears as a 2D swimmer in the pool">
+                      no 3D model yet
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <AnimatePresence>
+            {character && (
+              <motion.div
+                className="roster-confirm glass-surface"
+                data-glass
+                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              >
+                <span className="roster-confirm-who">
+                  <SwimmerAvatar character={character} pose="stand" size={30} />
+                  <span>
+                    Swim as <strong>{character.name}</strong>
+                  </span>
+                </span>
+                <button type="button" className="length-button" onClick={() => setStage("slot")}>
+                  Choose lane →
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -261,11 +407,25 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
             <SwimmerAvatar character={character} pose="stand" size={32} />
             Pick your lane, {character.name}!
           </h2>
-          <p className="pool-meta">Drag to rotate, scroll/pinch to zoom, tap an open lane below.</p>
-          <div className="pool-stage pool-stage-big">
-            <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
-              <Pool3D activeLane={null} onPickLane={handlePickLane} occupiedLanes={occupiedLanes} />
-            </Suspense>
+          <p className="pool-meta">
+            🎮 WASD/arrows to walk, Enter to pick — or drag to rotate, scroll/pinch to zoom, tap an open lane below.
+          </p>
+          <div className="pool-arena">
+            <SwimSchool count={4} seed={11} className="pool-school" />
+            <div className="pool-stage pool-stage-big">
+              <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
+                <Pool3D
+                  activeLane={null}
+                  onPickLane={handlePickLane}
+                  occupiedLanes={occupiedLanes}
+                  roamer={{
+                    modelUrl: character.modelUrl,
+                    modelScale: character.modelScale,
+                    modelRotationY: character.modelRotationY,
+                  }}
+                />
+              </Suspense>
+            </div>
           </div>
           {error && <p className="pool-error">{error}</p>}
         </div>
@@ -287,6 +447,7 @@ export default function PoolView({ events }: { events: SwimEvent[] }) {
                 </>
               )}
             </p>
+            <SwimSchool count={4} seed={29} className="pool-school" />
             <div className="pool-stage pool-stage-big">
               <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
                 <Pool3D
