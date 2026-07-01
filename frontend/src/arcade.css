@@ -1,0 +1,828 @@
+/*
+ * Arcade makeover layer.
+ * Adds the "game" feel on top of the existing pastel/glass brand: a drifting
+ * 2D school of swimmers, bouncy buttons & tabs, pop-in cards, a HUD-style
+ * header, and assorted juice. Loaded once from App.tsx so every screen gets
+ * the same vocabulary of motion.
+ */
+
+/* =========================================================================
+   SwimSchool — drifting 2D swimmers (decorative background life)
+   ========================================================================= */
+
+.swim-school {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.swim-school-fixed {
+  position: fixed;
+}
+
+.swim-lane {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation: swim-across var(--dur, 24s) linear var(--delay, 0s) infinite;
+}
+
+.swim-lane-rev {
+  animation-direction: reverse;
+}
+
+/* default lanes travel left -> right, so flip the (left-facing) avatar to
+   face the way it's going; reverse lanes keep the original facing. */
+.swim-face {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+.swim-lane-rev .swim-face {
+  transform: scaleX(1);
+}
+
+.swim-bob {
+  display: inline-block;
+  animation: swim-bob calc(var(--dur, 24s) / 7) ease-in-out infinite;
+}
+
+.swim-pulse {
+  display: inline-block;
+  /* the "resize" effect — each swimmer gently grows & shrinks as it swims */
+  animation: swim-pulse calc(var(--dur, 24s) / 5) ease-in-out infinite;
+}
+
+@keyframes swim-across {
+  from {
+    transform: translateX(-18vw);
+  }
+  to {
+    transform: translateX(118vw);
+  }
+}
+
+@keyframes swim-bob {
+  0%,
+  100% {
+    transform: translateY(calc(var(--bob, 12px) * -0.5)) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(calc(var(--bob, 12px) * 0.5)) rotate(3deg);
+  }
+}
+
+@keyframes swim-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* Pool-stage variant: swimmers float around the 3D canvas as "extras". */
+.pool-school .swim-lane {
+  opacity: 0.85;
+}
+
+/* Busy panels get a calmer, lower-contrast school behind the content. */
+.records-school .swim-lane {
+  opacity: 0.28 !important;
+}
+
+.intro-school .swim-lane {
+  opacity: 0.4;
+}
+
+/* Intro headline gets a gentle arcade bounce once it's settled in. */
+.intro.is-mounted .intro-title {
+  animation: idle-bob 4.5s ease-in-out 0.8s infinite;
+}
+
+/* =========================================================================
+   App shell: stack the swim layer behind the content
+   ========================================================================= */
+
+.app {
+  position: relative;
+  z-index: 1;
+}
+
+.app-bg-school .swim-lane {
+  filter: saturate(1.05);
+}
+
+/* =========================================================================
+   HUD-style header
+   ========================================================================= */
+
+.app-header {
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 241, 200, 0.5));
+  box-shadow: 0 10px 30px rgba(168, 85, 247, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.brand h1 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.brand h1 .brand-emoji {
+  display: inline-block;
+  animation: emoji-swim 2.8s ease-in-out infinite;
+  transform-origin: 60% 70%;
+}
+
+@keyframes emoji-swim {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(6deg);
+  }
+}
+
+/* =========================================================================
+   Bouncy segmented tabs
+   ========================================================================= */
+
+.tabs {
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 8px 22px rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.tab {
+  position: relative;
+  transition: color 0.15s ease, background 0.2s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab:hover:not(.active) {
+  transform: translateY(-1px) scale(1.015);
+}
+
+.tab:active {
+  transform: scale(0.92);
+}
+
+.tab.active {
+  animation: tab-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tab-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* =========================================================================
+   Button juice (shared)
+   ========================================================================= */
+
+.length-button,
+.intro-start-btn,
+.refresh-button {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.length-button:active:not(:disabled),
+.intro-start-btn:active,
+.refresh-button:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+/* big "go" buttons get an attention pulse so the next action reads clearly */
+.length-button {
+  position: relative;
+  animation: btn-attention 2.4s ease-in-out infinite;
+}
+
+.length-button:hover:not(:disabled) {
+  animation: none;
+}
+
+@keyframes btn-attention {
+  0%,
+  100% {
+    box-shadow: 0 6px 16px rgba(236, 72, 153, 0.35);
+  }
+  50% {
+    box-shadow: 0 10px 26px rgba(236, 72, 153, 0.55), 0 0 0 4px rgba(236, 72, 153, 0.12);
+  }
+}
+
+/* =========================================================================
+   Pop-in helpers (cards, grids)
+   ========================================================================= */
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes idle-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* =========================================================================
+   Character roster — picker layout
+   ========================================================================= */
+
+.picker-step-roster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.picker-step-roster > h2 {
+  justify-content: center;
+}
+
+/* ---- premium glass "Swimmer Controller" dock ----
+   The glass formula: LOW-opacity fill + HIGH blur + a sharp semi-transparent
+   border + a soft lifting shadow. Opacity stays low on purpose so the page
+   gradient and drifting swimmers read through it. */
+.studio-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto 24px;
+  padding: 16px 18px 18px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 14px 44px rgba(31, 38, 135, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+}
+
+.studio-card-title {
+  display: block;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  opacity: 0.58;
+  margin-bottom: 14px;
+}
+
+.studio-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.studio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 18px;
+  padding: 9px 12px;
+}
+
+.studio-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.studio-label em {
+  font-style: normal;
+  opacity: 0.85;
+  margin-left: 3px;
+}
+
+/* ---- elastic sliding pose segment (real Framer Motion layoutId) ----
+   The purple pill is a motion.span rendered inside the active button; when
+   the active tab changes, layoutId makes it physically spring across to the
+   new button rather than fading in/out. */
+.pose-seg {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.pose-seg-indicator {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--grad-primary);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+}
+
+.pose-seg-btn {
+  position: relative;
+  flex: 1 1 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--color-ink, #2c2350);
+  transition: color 0.2s ease;
+}
+
+.pose-seg-label {
+  position: relative;
+  z-index: 1;
+}
+
+.pose-seg-btn.active {
+  color: #fff;
+}
+
+/* ---- size slider ---- */
+.studio-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.size-slider {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  accent-color: var(--color-accent, #a855f7);
+  cursor: pointer;
+}
+
+/* ---- motion switch ---- */
+.motion-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink, #2c2350);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.18s ease;
+}
+
+.motion-switch:active {
+  transform: scale(0.96);
+}
+
+.motion-switch.on {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: var(--color-accent-dark, #9333ea);
+}
+
+.motion-switch-track {
+  width: 32px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 2px;
+  transition: background 0.2s ease;
+}
+
+.motion-switch-knob {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.motion-switch.on .motion-switch-track {
+  background: var(--grad-primary);
+}
+
+.motion-switch.on .motion-switch-knob {
+  transform: translateX(16px);
+}
+
+.motion-switch:focus-visible {
+  outline: 2px solid var(--color-accent, #a855f7);
+  outline-offset: 2px;
+}
+
+/* =========================================================================
+   Character roster — high-fidelity interactive cards
+   ========================================================================= */
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.character-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 15px 10px 13px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-ink);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.1);
+  opacity: 0;
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease,
+    border-color 0.22s ease, background 0.22s ease;
+}
+
+.character-card:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.character-card:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.character-card:nth-child(3) {
+  animation-delay: 0.19s;
+}
+.character-card:nth-child(4) {
+  animation-delay: 0.26s;
+}
+.character-card:nth-child(5) {
+  animation-delay: 0.33s;
+}
+.character-card:nth-child(6) {
+  animation-delay: 0.4s;
+}
+
+/* hover: a gentle lift — kept subtle so it's easy on the eyes */
+.character-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.44);
+  border-color: rgba(168, 85, 247, 0.28);
+  box-shadow: 0 9px 20px rgba(168, 85, 247, 0.14);
+}
+
+.character-card:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.character-card:focus-visible {
+  outline: none;
+  border-color: var(--color-accent, #a855f7);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.28), 0 14px 28px rgba(168, 85, 247, 0.2);
+}
+
+/* selected swimmer: anchored gradient ring + glow so the choice reads clearly */
+.character-card.is-selected {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: transparent;
+  box-shadow: 0 0 0 2.5px rgba(168, 85, 247, 0.55), 0 16px 34px rgba(168, 85, 247, 0.26);
+}
+
+.character-card.is-selected::after {
+  content: "✓";
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  border-radius: 50%;
+  background: var(--grad-primary);
+  box-shadow: 0 3px 8px rgba(236, 72, 153, 0.4);
+}
+
+/* hide the PLAY ribbon once a card is the selected one (the ✓ takes over) */
+.character-card.is-selected::before {
+  opacity: 0;
+}
+
+/* avatar spotlight stage — soft radial well, never clips the swim/climb pose */
+.avatar-stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 92px;
+  border-radius: 18px;
+  background: radial-gradient(
+    62% 60% at 50% 44%,
+    rgba(255, 255, 255, 0.62),
+    rgba(255, 240, 200, 0.16) 68%,
+    transparent
+  );
+}
+
+.avatar-wrap {
+  display: inline-flex;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.character-card:hover .avatar-wrap {
+  transform: scale(1.03);
+}
+
+/* the "Animate" switch re-uses the swim keyframes to preview live motion */
+.avatar-motion {
+  animation: idle-bob 2.8s ease-in-out infinite, swim-pulse 3.4s ease-in-out infinite;
+}
+
+.character-name {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* corner badge: 3D (gradient) vs 2D-only (frosted glass chip) */
+.character-badge {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+
+.character-badge-3d {
+  color: #fff;
+  background: var(--grad-primary);
+  box-shadow: 0 3px 8px rgba(236, 72, 153, 0.35);
+}
+
+.character-badge-2d {
+  color: var(--color-ink, #2c2350);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.character-badge-you {
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+  box-shadow: 0 3px 8px rgba(20, 184, 166, 0.35);
+}
+
+/* the user's own avatar card gets a calm teal anchor so it reads as "you" */
+.character-card.is-you {
+  border-color: rgba(20, 184, 166, 0.45);
+  background: rgba(236, 253, 245, 0.5);
+}
+
+.character-card.is-you .avatar-stage {
+  background: radial-gradient(62% 60% at 50% 44%, rgba(20, 184, 166, 0.16), transparent 70%);
+}
+
+/* tiny constraint hint under 2D-only swimmers (full info via title tooltip) */
+.character-hint {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--color-muted, #8a83a8);
+  opacity: 0.85;
+}
+
+/* PLAY ribbon flies in on hover */
+.character-card::before {
+  content: "PLAY";
+  position: absolute;
+  top: 9px;
+  right: -34px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: var(--grad-primary);
+  padding: 2px 30px;
+  transform: rotate(38deg);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.character-card:hover::before {
+  opacity: 0.5;
+}
+
+/* animated confirm dock — appears once a swimmer is selected */
+.roster-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px auto 0;
+  padding: 9px 9px 9px 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 12px 30px rgba(168, 85, 247, 0.18);
+}
+
+.roster-confirm-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink, #2c2350);
+}
+
+.roster-confirm-who strong {
+  color: var(--color-accent-dark, #9333ea);
+}
+
+/* the confirm CTA shouldn't pulse like the other primary buttons */
+.roster-confirm .length-button {
+  animation: none;
+}
+
+@media (max-width: 520px) {
+  .character-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .studio-row-split {
+    flex-wrap: wrap;
+  }
+}
+
+/* =========================================================================
+   Pool stage framing
+   ========================================================================= */
+
+.pool-stage-wrap {
+  position: relative;
+}
+
+.pool-arena {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.pool-stage {
+  position: relative;
+  z-index: 1;
+}
+
+.pool-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--radius-pill);
+  padding: 7px 16px;
+  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* slot/length pickers pop in too */
+.slot-button,
+.length-button,
+.length-choices > * {
+  animation: pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.slot-button:hover {
+  transform: translateX(2px);
+  transition: transform 0.18s ease;
+}
+
+/* =========================================================================
+   Summary celebration
+   ========================================================================= */
+
+.summary-card {
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  border: 1.5px solid rgba(255, 255, 255, 0.75);
+}
+
+.summary-card::after {
+  content: "🎉";
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  animation: idle-bob 1.6s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Records — arcade scoreboard
+   ========================================================================= */
+
+.stat-card {
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+.stat-card:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.stat-card:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.stat-card:nth-child(3) {
+  animation-delay: 0.19s;
+}
+.stat-card:nth-child(4) {
+  animation-delay: 0.26s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 10px 22px rgba(214, 167, 60, 0.18);
+}
+
+.stat-value {
+  background: var(--grad-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 10px rgba(236, 72, 153, 0.12);
+}
+
+.record-card {
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.record-card svg {
+  animation: idle-bob 3.4s ease-in-out infinite;
+}
+
+/* =========================================================================
+   Reduced-motion: keep it calm
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .swim-lane,
+  .swim-bob,
+  .swim-pulse,
+  .avatar-motion,
+  .intro.is-mounted .intro-title,
+  .brand-emoji,
+  .length-button,
+  .character-card,
+  .character-card svg,
+  .record-card svg,
+  .stat-card,
+  .record-card,
+  .summary-card,
+  .summary-card::after {
+    animation: none !important;
+  }
+  .swim-school {
+    display: none;
+  }
+}

@@ -1,7 +1,7 @@
 import type { SwimEvent } from "../types";
 import { formatTime } from "../utils/time";
 
-function poolEmoji(facilityName: string | undefined | null): string {
+function poolEmoji(facilityName: string | null | undefined): string {
   const name = (facilityName ?? "").toLowerCase();
   if (name.includes("recreation")) return "🔵";
   if (name.includes("leisure")) return "🟢";

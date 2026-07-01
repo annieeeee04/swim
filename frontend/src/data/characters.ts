@@ -5,7 +5,10 @@ export interface Character {
   skin: string;
   suit: string;
   cap: string;
-  /** Path (under /public) to the real 3D model shown in the pool scene. */
+  /** Path (under /public) to the real 3D model shown in the pool scene.
+   *  "" means no model has been uploaded yet — the 3D pool falls back to a
+   *  generic placeholder swimmer, while every 2D spot (picker, records, etc.)
+   *  already just uses the SwimmerAvatar icon, model or not. */
   modelUrl: string;
   /** Multiplies the model's auto-normalized height. 1 = the scene's standard swimmer height. */
   modelScale?: number;
@@ -42,6 +45,36 @@ export const CHARACTERS: Character[] = [
     suit: "#5b8fc7",
     cap: "#f2e6c9",
     modelUrl: "/models/bopeep.glb",
+    modelScale: 1,
+    modelRotationY: 0,
+  },
+  {
+    id: "jessie",
+    name: "Jessie",
+    skin: "#f3c89e",
+    suit: "#e11d48",
+    cap: "#fbbf24",
+    modelUrl: "",
+    modelScale: 1,
+    modelRotationY: 0,
+  },
+  {
+    id: "rex",
+    name: "Rex",
+    skin: "#4ade80",
+    suit: "#15803d",
+    cap: "#166534",
+    modelUrl: "",
+    modelScale: 1,
+    modelRotationY: 0,
+  },
+  {
+    id: "hamm",
+    name: "Hamm",
+    skin: "#f9a8d4",
+    suit: "#db2777",
+    cap: "#9d174d",
+    modelUrl: "",
     modelScale: 1,
     modelRotationY: 0,
   },

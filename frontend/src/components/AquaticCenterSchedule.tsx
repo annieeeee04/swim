@@ -10,8 +10,8 @@ const AquaticCenterScene = lazy(() => import("./AquaticCenterScene"));
 
 const INLINE_PREVIEW = 2;
 
-function poolEmoji(facilityName: string): string {
-  const name = facilityName.toLowerCase();
+function poolEmoji(facilityName: string | null | undefined): string {
+  const name = (facilityName ?? "").toLowerCase();
   if (name.includes("recreation")) return "🔵";
   if (name.includes("leisure")) return "🟢";
   if (name.includes("competition") || name.includes("comp")) return "🟣";

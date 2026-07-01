@@ -205,13 +205,13 @@
 }
 
 .record-status-done {
-  background: rgba(32, 201, 151, 0.18);
-  color: #0f9b6c;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .record-status-live {
-  background: rgba(236, 72, 153, 0.16);
-  color: var(--color-pink);
+  background: var(--color-live-bg);
+  color: var(--color-live);
 }
 
 .record-character-name {
