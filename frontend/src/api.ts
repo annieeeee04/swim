@@ -103,7 +103,7 @@ export async function finishSwim(id: number, distanceMeters: number): Promise<Sw
 }
 
 export async function fetchSwimHistory(): Promise<SwimRecord[]> {
-  const res = await fetch(`${API_BASE}/api/swim-records`);
+  const res = await fetch(`${API_BASE}/api/swim-records`, { headers: authHeaders() });
   if (!res.ok) {
     throw new Error(`Backend returned HTTP ${res.status}`);
   }

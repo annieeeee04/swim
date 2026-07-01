@@ -38,10 +38,16 @@ public class SwimRecordController {
         this.auth = auth;
     }
 
-    /** Full swim history, most recent first. */
+    /** Swim history for the authenticated user, most recent first. */
     @GetMapping
-    public List<SwimRecord> getAll() {
-        return repository.findAllByOrderByStartedAtDesc();
+    public List<SwimRecord> getAll(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        User user = auth.optionalUser(authHeader);
+        if (user != null) {
+            return repository.findByUserIdOrderByStartedAtDesc(user.getId());
+        }
+        // No token — return empty list rather than leaking everyone's records.
+        return List.of();
     }
 
     /** Lanes (1-10) currently occupied by a swim that hasn't been completed yet. */
