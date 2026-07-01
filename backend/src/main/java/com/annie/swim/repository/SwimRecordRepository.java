@@ -10,6 +10,9 @@ public interface SwimRecordRepository extends JpaRepository<SwimRecord, Long> {
 
     List<SwimRecord> findAllByOrderByStartedAtDesc();
 
+    /** Records belonging to one user, most recent first. */
+    List<SwimRecord> findByUserIdOrderByStartedAtDesc(Long userId);
+
     /** Lanes currently occupied by a swim that hasn't been completed yet. */
     List<SwimRecord> findByCompletedAtIsNull();
 
