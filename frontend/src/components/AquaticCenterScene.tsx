@@ -22,34 +22,27 @@ interface AquaticCenterSceneProps {
   onHoverZone?: (key: string | null) => void;
 }
 
-const DEFAULT_CAM_POS = new THREE.Vector3(-1.0, 13.5, 12);
-const DEFAULT_TARGET = new THREE.Vector3(-1.0, 0, 0);
+const DEFAULT_CAM_POS = new THREE.Vector3(-0.5, 13.5, 13.5);
+const DEFAULT_TARGET = new THREE.Vector3(-0.5, 0, 0.2);
 
-function zoneColor(zone: ZoneLayout): number {
-  if (zone.key === "hot-tub") return 0xfef3c7;
-  if (zone.key === "leisure") return 0xccfbf1;
-  if (zone.poolLength === 50) return 0xf3e8ff;
-  if (zone.poolLength === 25) return 0xe0f2fe;
-  return 0xf1f5f9;
-}
+// ---------------------------------------------------------------------------
+// Canvas Textures & Materials
+// ---------------------------------------------------------------------------
 
 function makeLabelSprite(
   text: string,
   opts: { bg?: string; fg?: string; w?: number; h?: number; isBadge?: boolean } = {},
 ): THREE.Sprite {
-  const { bg = "rgba(255, 255, 255, 0.92)", fg = "#1e1b4b", w = 280, h = 80, isBadge = false } = opts;
+  const { bg = "rgba(255,255,255,0.96)", fg = "#1e1b4b", w = 320, h = 90, isBadge = false } = opts;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-
-  // Elegant rounded pill background with a clean, soft shadow.
   const radius = h / 2;
-  ctx.shadowColor = "rgba(0, 0, 0, 0.06)";
+  ctx.shadowColor = "rgba(15,23,42,0.15)";
   ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 4;
   ctx.fillStyle = bg;
-
   ctx.beginPath();
   ctx.moveTo(radius, 0);
   ctx.arcTo(w, 0, w, h, radius);
@@ -58,41 +51,34 @@ function makeLabelSprite(
   ctx.arcTo(0, 0, w, 0, radius);
   ctx.closePath();
   ctx.fill();
-
-  // Reset shadow for crisp text rendering.
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
   ctx.fillStyle = fg;
   ctx.font = isBadge
-    ? "bold 36px system-ui, -apple-system, sans-serif"
-    : "600 26px system-ui, -apple-system, sans-serif";
+    ? "bold 44px system-ui, -apple-system, sans-serif"
+    : "700 28px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, w / 2, h / 2 + 1);
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({ map: texture, depthTest: true, transparent: true });
-  const sprite = new THREE.Sprite(material);
-
-  const scale = isBadge ? 0.45 : 0.65;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
+  const scale = isBadge ? 0.45 : 0.68;
   sprite.scale.set((w / h) * scale, scale, 1);
+  sprite.renderOrder = 20;
   return sprite;
 }
 
-function makeFloorTexture(): THREE.CanvasTexture {
+/** White ceramic deck tiles with soft grout lines */
+function makeDeckTexture(): THREE.CanvasTexture {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-
-  // Clean off-white minimalist floor.
-  ctx.fillStyle = "#fcfbfa";
+  ctx.fillStyle = "#f5f4f0";
   ctx.fillRect(0, 0, size, size);
-
-  // Subdued, professional thin grid lines.
-  ctx.strokeStyle = "#f1f0ea";
+  ctx.strokeStyle = "#e2dfd5";
   ctx.lineWidth = 2;
   const step = size / 8;
   for (let i = 0; i <= 8; i++) {
@@ -105,59 +91,77 @@ function makeFloorTexture(): THREE.CanvasTexture {
     ctx.lineTo(size, i * step);
     ctx.stroke();
   }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  return texture;
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
-function makeLaneWaterTexture(
-  widthUnits: number,
-  depthUnits: number,
-  tone: "rec" | "comp",
-  lanes = 8,
-): THREE.CanvasTexture {
+/** Segmented buoy / lane-rope appearance via texture mapping */
+function makeRopeTexture(mainColor: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 16;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = mainColor;
+  ctx.fillRect(0, 0, 32, 16);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(32, 0, 32, 16);
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = THREE.RepeatWrapping;
+  t.repeat.set(24, 1);
+  return t;
+}
+
+/** Pool-water texture incorporating subsurface swimming lane T-lines */
+function makeWaterTexture(widthUnits: number, depthUnits: number, tone: "rec" | "comp", lanes: number): THREE.CanvasTexture {
   const vertical = depthUnits >= widthUnits;
-  const long = Math.max(widthUnits, depthUnits);
-  const resLong = 512;
-  const resShort = Math.max(64, Math.round((Math.min(widthUnits, depthUnits) / long) * resLong));
-  const canvasW = vertical ? resShort : resLong;
-  const canvasH = vertical ? resLong : resShort;
+  const canvasW = vertical ? 256 : 512;
+  const canvasH = vertical ? 512 : 256;
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
   canvas.height = canvasH;
   const ctx = canvas.getContext("2d")!;
-
-  // Smooth architectural blue gradient.
   const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
   if (tone === "comp") {
-    grad.addColorStop(0, "#bae6fd");
-    grad.addColorStop(1, "#38bdf8");
+    grad.addColorStop(0, "#2989d8");
+    grad.addColorStop(0.5, "#1e73be");
+    grad.addColorStop(1, "#105291");
   } else {
-    grad.addColorStop(0, "#ccfbf1");
-    grad.addColorStop(1, "#2dd4bf");
+    grad.addColorStop(0, "#54c2e6");
+    grad.addColorStop(0.5, "#34a5d4");
+    grad.addColorStop(1, "#2082b3");
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvasW, canvasH);
-
-  // Sleek, minimal technical lane lines.
-  ctx.strokeStyle = "rgba(14, 116, 144, 0.25)";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(8,50,85,0.45)";
+  ctx.lineWidth = 5;
+  const longLen = vertical ? canvasH : canvasW;
   for (let i = 1; i < lanes; i++) {
-    const t = i / lanes;
+    const t = (i / lanes) * (vertical ? canvasW : canvasH);
     ctx.beginPath();
     if (vertical) {
-      ctx.moveTo(t * canvasW, 0);
-      ctx.lineTo(t * canvasW, canvasH);
+      ctx.moveTo(t, longLen * 0.06);
+      ctx.lineTo(t, longLen * 0.94);
     } else {
-      ctx.moveTo(0, t * canvasH);
-      ctx.lineTo(canvasW, t * canvasH);
+      ctx.moveTo(longLen * 0.06, t);
+      ctx.lineTo(longLen * 0.94, t);
     }
     ctx.stroke();
+    ctx.lineWidth = 7;
+    for (const end of [0.08, 0.92]) {
+      ctx.beginPath();
+      if (vertical) {
+        ctx.moveTo(t - 10, longLen * end);
+        ctx.lineTo(t + 10, longLen * end);
+      } else {
+        ctx.moveTo(longLen * end, t - 10);
+        ctx.lineTo(longLen * end, t + 10);
+      }
+      ctx.stroke();
+    }
+    ctx.lineWidth = 5;
   }
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -169,87 +173,236 @@ function makeSoftWaterTexture(tone: "leisure" | "hot-tub"): THREE.CanvasTexture 
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size * 0.5, size * 0.5, 0, size * 0.5, size * 0.5, size * 0.7);
-
+  const grad = ctx.createRadialGradient(size * 0.5, size * 0.45, size * 0.1, size * 0.5, size * 0.5, size * 0.75);
   if (tone === "leisure") {
-    grad.addColorStop(0, "#e0f2fe");
-    grad.addColorStop(1, "#bae6fd");
+    grad.addColorStop(0, "#c2f2ff");
+    grad.addColorStop(0.6, "#70d6f2");
+    grad.addColorStop(1, "#49b7d6");
   } else {
-    grad.addColorStop(0, "#ffedd5");
-    grad.addColorStop(1, "#fed7aa");
+    grad.addColorStop(0, "#ffe8cc");
+    grad.addColorStop(0.5, "#f7be83");
+    grad.addColorStop(1, "#e0984c");
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
+// ---------------------------------------------------------------------------
+// Custom Complex Vector Shapes
+// ---------------------------------------------------------------------------
+
+/** The organic architectural footprint of the Leisure Pool (with lazy-river arm). */
 function buildLeisureShape(): THREE.Shape {
   const shape = new THREE.Shape();
-  shape.moveTo(-0.45, -0.35);
-  shape.bezierCurveTo(-0.52, 0.1, -0.3, 0.45, 0.05, 0.42);
-  shape.bezierCurveTo(0.35, 0.4, 0.5, 0.15, 0.4, -0.1);
-  shape.bezierCurveTo(0.48, -0.22, 0.42, -0.4, 0.22, -0.45);
-  shape.bezierCurveTo(-0.02, -0.5, -0.28, -0.48, -0.45, -0.35);
+  shape.moveTo(-1.6, 1.4);
+  shape.lineTo(0.2, 1.4);
+  shape.quadraticCurveTo(0.9, 1.4, 0.9, 0.7);
+  shape.lineTo(0.9, -0.1);
+  shape.quadraticCurveTo(0.9, -0.8, 0.2, -1.2);
+  shape.bezierCurveTo(-0.2, -1.5, -0.9, -1.5, -1.3, -1.1);
+  shape.lineTo(-1.6, -0.7);
+  shape.lineTo(-1.6, -1.2);
+  shape.lineTo(-2.2, -1.2);
+  shape.lineTo(-2.2, 0.5);
+  shape.lineTo(-1.6, 0.5);
+  shape.closePath();
   return shape;
 }
 
-function addWallRing(
-  scene: THREE.Scene,
-  minX: number,
-  maxX: number,
-  minZ: number,
-  maxZ: number,
-  thickness: number,
-  height: number,
-  color: number,
-) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
-  const w = maxX - minX;
-  const d = maxZ - minZ;
-  const cx = (minX + maxX) / 2;
-  const cz = (minZ + maxZ) / 2;
-  const north = new THREE.Mesh(new THREE.BoxGeometry(w + thickness * 2, height, thickness), mat);
-  north.position.set(cx, height / 2, minZ - thickness / 2);
-  scene.add(north);
-  const south = north.clone();
-  south.position.set(cx, height / 2, maxZ + thickness / 2);
-  scene.add(south);
-  const east = new THREE.Mesh(new THREE.BoxGeometry(thickness, height, d), mat);
-  east.position.set(maxX + thickness / 2, height / 2, cz);
-  scene.add(east);
-  const west = east.clone();
-  west.position.set(minX - thickness / 2, height / 2, cz);
-  scene.add(west);
+/** The angular trapezoidal boundary of the Hot Tub. */
+function buildHotTubShape(): THREE.Shape {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.6, 0.7);
+  shape.lineTo(0.6, 0.7);
+  shape.lineTo(0.6, -0.3);
+  shape.lineTo(0.1, -0.8);
+  shape.lineTo(-0.6, -0.1);
+  shape.closePath();
+  return shape;
 }
 
-function buildAvatar(): THREE.Group {
+// ---------------------------------------------------------------------------
+// 3D Procedural Prop Builders
+// ---------------------------------------------------------------------------
+
+/** Olympic diving platform: 3 platform heights + flanking springboards. */
+function buildDivingTower(): THREE.Group {
   const group = new THREE.Group();
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x4f46e5, roughness: 0.4 });
-  const pin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 4), baseMat);
-  pin.position.y = 0.3;
-  pin.rotation.x = Math.PI;
-  group.add(pin);
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.16, 24),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.08 }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.005;
-  group.add(shadow);
+  const concreteMat = new THREE.MeshStandardMaterial({ color: 0xe2e5e9, roughness: 0.6 });
+  const platformMat = new THREE.MeshStandardMaterial({ color: 0xd0d5dd, roughness: 0.7 });
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.4 });
+  const boardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.5 });
+
+  const towerColumn = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.2, 0.6), concreteMat);
+  towerColumn.position.set(0, 1.6, -0.3);
+  group.add(towerColumn);
+
+  const levels = [1.2, 2.1, 3.0];
+  levels.forEach((height, idx) => {
+    const platW = 0.45;
+    const platD = 1.1;
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(platW, 0.08, platD), platformMat);
+    platform.position.set(0, height, -0.1 + idx * 0.05);
+    group.add(platform);
+    const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.35, platD), railMat);
+    leftRail.position.set(-platW / 2, height + 0.18, 0);
+    const rightRail = leftRail.clone();
+    rightRail.position.x = platW / 2;
+    group.add(leftRail, rightRail);
+  });
+
+  [-0.6, 0.6].forEach((offsetX) => {
+    const sprBase = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 0.3), baseMat);
+    sprBase.position.set(offsetX, 0.2, -0.4);
+    group.add(sprBase);
+    const springboard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 1.2), boardMat);
+    springboard.position.set(offsetX, 0.42, 0.1);
+    springboard.rotation.x = 0.03;
+    group.add(springboard);
+    const sbRail = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.4, 0.6), railMat);
+    sbRail.position.set(offsetX + (offsetX > 0 ? 0.08 : -0.08), 0.62, -0.2);
+    group.add(sbRail);
+  });
   return group;
 }
 
-const AVATAR_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", " "]);
+/** Hydraulic aquatic accessibility lift. */
+function buildAquaticLift(): THREE.Group {
+  const lift = new THREE.Group();
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0xbcc4cc, metalness: 0.8, roughness: 0.2 });
+  const blueMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 12), metalMat);
+  post.position.y = 0.3;
+  lift.add(post);
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 8), blueMat);
+  cyl.position.set(0, 0.4, 0);
+  lift.add(cyl);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.45), metalMat);
+  arm.position.set(0, 0.58, 0.15);
+  arm.rotation.x = -0.15;
+  lift.add(arm);
+  const chairHang = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.3, 8), metalMat);
+  chairHang.position.set(0, 0.4, 0.36);
+  lift.add(chairHang);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 0.15), blueMat);
+  seat.position.set(0, 0.25, 0.36);
+  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.02), blueMat);
+  backrest.position.set(0, 0.33, 0.295);
+  lift.add(seat, backrest);
+  return lift;
+}
 
-/**
- * A clean, minimalist top-down map of the aquatic centre: an off-white tiled
- * deck, each real pool/zone rendered as a sunken basin of water with pill
- * labels and a session-count badge, plus a soft camera "focus" ease when a
- * zone is selected. Built directly on three.js (no react-three-fiber).
- */
+/** Water fountain / spray arch feature. */
+function buildFountainSpout(arcRadius: number, rotY: number): THREE.Group {
+  const fountain = new THREE.Group();
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.1 });
+  const waterMat = new THREE.MeshStandardMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.65, roughness: 0.0 });
+  const neck = new THREE.Mesh(new THREE.TorusGeometry(arcRadius, 0.025, 12, 24, Math.PI * 0.6), chromeMat);
+  neck.rotation.set(0, rotY, Math.PI * 0.7);
+  neck.position.set(0, 0.35, 0);
+  fountain.add(neck);
+  const stream = new THREE.Mesh(new THREE.TorusGeometry(arcRadius * 1.1, 0.02, 8, 16, Math.PI * 0.4), waterMat);
+  stream.rotation.set(0, rotY, Math.PI * 1.1);
+  stream.position.set(0, 0.25, 0.05);
+  fountain.add(stream);
+  return fountain;
+}
+
+/** Submerged structural entry steps. */
+function buildPoolStairs(stepsCount: number, width: number, depth: number, height: number): THREE.Group {
+  const stairs = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xeef2f6, roughness: 0.5 });
+  for (let i = 0; i < stepsCount; i++) {
+    const stepW = width;
+    const stepD = depth * (1 - i / stepsCount);
+    const stepH = height / stepsCount;
+    const box = new THREE.Mesh(new THREE.BoxGeometry(stepW, stepH, stepD), mat);
+    box.position.set(0, -height + stepH / 2 + i * stepH, -depth / 2 + stepD / 2);
+    stairs.add(box);
+  }
+  return stairs;
+}
+
+/** Poolside basketball hoop. */
+function buildBasketballHoop(): THREE.Group {
+  const hoop = new THREE.Group();
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  const orangeMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.3 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, roughness: 0.1 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), whiteMat);
+  post.position.set(0, 0.35, 0);
+  hoop.add(post);
+  const backboard = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.26, 0.02), glassMat);
+  backboard.position.set(0, 0.7, 0.05);
+  hoop.add(backboard);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.01, 8, 16), orangeMat);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.set(0, 0.64, 0.14);
+  hoop.add(rim);
+  return hoop;
+}
+
+/** Stainless grab-rail / ladder handle on a pool edge. */
+function buildLadder(): THREE.Group {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.25, metalness: 0.75 });
+  for (const dx of [-0.08, 0.08]) {
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.42, 10), mat);
+    rail.position.set(dx, 0.06, 0);
+    g.add(rail);
+    const step = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 8), mat);
+    step.rotation.z = Math.PI / 2;
+    step.position.set(0, -0.05, 0);
+    g.add(step);
+  }
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.016, 8, 18, Math.PI), mat);
+  arch.position.y = 0.28;
+  arch.rotation.y = Math.PI / 2;
+  g.add(arch);
+  return g;
+}
+
+function buildBench(): THREE.Group {
+  const g = new THREE.Group();
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0xccaa77, roughness: 0.65 });
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.26), woodMat);
+  seat.position.y = 0.15;
+  g.add(seat);
+  for (const dx of [-0.4, 0.4]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.22), legMat);
+    leg.position.set(dx, 0.075, 0);
+    g.add(leg);
+  }
+  return g;
+}
+
+function buildLifeguardChair(): THREE.Group {
+  const g = new THREE.Group();
+  const frame = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+  const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
+  for (const dx of [-0.14, 0.14]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.8, 8), frame);
+    leg.position.set(dx, 0.4, 0);
+    g.add(leg);
+  }
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.28), redMat);
+  seat.position.y = 0.8;
+  g.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.25, 0.04), redMat);
+  back.position.set(0, 0.95, -0.12);
+  g.add(back);
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
+
 export default function AquaticCenterScene({
   zones,
   activeZoneKey,
@@ -259,13 +412,6 @@ export default function AquaticCenterScene({
 }: AquaticCenterSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const zoneMeshesRef = useRef<THREE.Mesh[]>([]);
-  const rippleMeshesRef = useRef<THREE.Mesh[]>([]);
-  const rippleScalesRef = useRef<{ x: number; z: number }[]>([]);
-  const baseOpacitiesRef = useRef<number[]>([]);
-  const waterBaseYsRef = useRef<number[]>([]);
-  const avatarGroupRef = useRef<THREE.Group | null>(null);
-  const avatarPosRef = useRef(new THREE.Vector3(-1.0, 0, 1.2));
-  const keysRef = useRef<Set<string>>(new Set());
   const stateRef = useRef({ activeZoneKey, onPickZone, onHoverZone, focusZoneKey });
 
   useEffect(() => {
@@ -278,9 +424,9 @@ export default function AquaticCenterScene({
 
     const scene = new THREE.Scene();
     scene.background = null;
-    scene.fog = new THREE.Fog(0xfbfbfa, 10, 25);
+    scene.fog = new THREE.Fog(0xf1f5f9, 18, 35);
 
-    const camera = new THREE.PerspectiveCamera(32, container.clientWidth / container.clientHeight, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(28, container.clientWidth / container.clientHeight, 0.1, 100);
     camera.position.copy(DEFAULT_CAM_POS);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -293,10 +439,10 @@ export default function AquaticCenterScene({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enablePan = false;
-    controls.minDistance = 7;
-    controls.maxDistance = 20;
-    controls.minPolarAngle = 0.4;
-    controls.maxPolarAngle = 1.1;
+    controls.minDistance = 6;
+    controls.maxDistance = 24;
+    controls.minPolarAngle = 0.3;
+    controls.maxPolarAngle = 1.2;
     controls.update();
 
     let transition: {
@@ -312,197 +458,322 @@ export default function AquaticCenterScene({
       transition = null;
     });
 
-    // Balanced premium lighting.
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    mainLight.position.set(6, 18, 8);
-    scene.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.3);
-    fillLight.position.set(-6, 12, -8);
-    scene.add(fillLight);
+    // ---- Illumination ----
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const primarySun = new THREE.DirectionalLight(0xffffff, 0.9);
+    primarySun.position.set(6, 20, 8);
+    scene.add(primarySun);
+    const softFill = new THREE.DirectionalLight(0xdbeafe, 0.4);
+    softFill.position.set(-8, 12, -6);
+    scene.add(softFill);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe7ef, 0.3));
 
-    // Floor base.
-    const floorTexture = makeFloorTexture();
-    floorTexture.repeat.set(4, 2.5);
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(15, 9),
-      new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.9 }),
+    // ---- Deck + enclosure ----
+    const dMinX = -8.0,
+      dMaxX = 7.2,
+      dMinZ = -4.5,
+      dMaxZ = 4.5;
+    const dW = dMaxX - dMinX,
+      dD = dMaxZ - dMinZ;
+    const dCx = (dMinX + dMaxX) / 2,
+      dCz = (dMinZ + dMaxZ) / 2;
+
+    const baseBuffer = new THREE.Mesh(
+      new THREE.BoxGeometry(dW + 0.8, 0.16, dD + 0.8),
+      new THREE.MeshStandardMaterial({ color: 0xaecfa0, roughness: 0.9 }),
     );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(-1.0, -0.01, 0.0);
-    scene.add(floor);
+    baseBuffer.position.set(dCx, -0.08, dCz);
+    scene.add(baseBuffer);
 
-    // Flat outer borders instead of stark walls.
-    addWallRing(scene, -7.8, 4.8, -4.2, 4.1, 0.12, 0.15, 0xf1f0eb);
+    const deckTexture = makeDeckTexture();
+    deckTexture.repeat.set(dW * 0.8, dD * 0.8);
+    const mainDeck = new THREE.Mesh(
+      new THREE.BoxGeometry(dW, 0.18, dD),
+      new THREE.MeshStandardMaterial({ map: deckTexture, roughness: 0.8 }),
+    );
+    mainDeck.position.set(dCx, 0.01, dCz);
+    scene.add(mainDeck);
+    const deckY = 0.1;
 
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xdaebd6, roughness: 0.9 });
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(dW + 0.8, 2.4, 0.2), wallMat);
+    backWall.position.set(dCx, 1.2, dMinZ - 0.3);
+    scene.add(backWall);
+    const sideWallLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.4, dD + 0.8), wallMat);
+    sideWallLeft.position.set(dMinX - 0.3, 1.2, dCz);
+    scene.add(sideWallLeft);
+
+    // ---- Zone iteration ----
     const zoneMeshes: THREE.Mesh[] = [];
-    const rippleMeshes: THREE.Mesh[] = [];
-    const rippleScales: { x: number; z: number }[] = [];
-    const baseOpacities: number[] = [];
-    const waterBaseYs: number[] = [];
+    const waterAnimations: { mesh: THREE.Mesh; baseY: number; type: string }[] = [];
 
     for (const zone of zones) {
-      const isOtherFlat = zone.key.startsWith("other:");
-      const hasBasin = !isOtherFlat;
-      const basinDepth = zone.poolLength === 50 ? 0.45 : zone.poolLength === 25 ? 0.35 : 0.25;
-      let geometry: THREE.BufferGeometry;
-      let material: THREE.MeshStandardMaterial;
-      let baseOpacity = 0.94;
-      let scaleX = zone.width;
-      let scaleZ = zone.depth;
+      const isOther = zone.key.startsWith("other:");
+      const isHotTub = zone.key === "hot-tub" || zone.label.toLowerCase().includes("tub");
+      const bDepth = zone.poolLength === 50 ? 0.7 : zone.poolLength === 25 ? 0.55 : 0.35;
+      const wBaseY = !isOther ? deckY - bDepth + 0.06 : deckY + 0.01;
+      let geo: THREE.BufferGeometry;
+      let mat: THREE.MeshStandardMaterial;
+      let sX = zone.width;
+      let sZ = zone.depth;
+      const along: "x" | "z" = zone.depth >= zone.width ? "z" : "x";
+      const shortSide = Math.min(zone.width, zone.depth);
+      const laneCount = THREE.MathUtils.clamp(Math.round(shortSide / 0.58), 4, 10);
 
       if (zone.shape === "leisure") {
-        geometry = new THREE.ShapeGeometry(buildLeisureShape(), 32);
-        baseOpacity = 0.9;
-        material = new THREE.MeshStandardMaterial({
-          map: makeSoftWaterTexture("leisure"),
-          transparent: true,
-          opacity: baseOpacity,
-          roughness: 0.15,
-        });
-      } else if (zone.shape === "ellipse") {
-        geometry = new THREE.CircleGeometry(1, 48);
-        scaleX = zone.width / 2;
-        scaleZ = zone.depth / 2;
-        const tone = zone.key === "hot-tub" ? "hot-tub" : "leisure";
-        material = new THREE.MeshStandardMaterial({
-          map: makeSoftWaterTexture(tone),
-          transparent: true,
-          opacity: baseOpacity,
-          roughness: 0.15,
-        });
-      } else if (isOtherFlat) {
-        geometry = new THREE.PlaneGeometry(1, 1);
-        baseOpacity = 0.85;
-        material = new THREE.MeshStandardMaterial({
-          color: zoneColor(zone),
-          transparent: true,
-          opacity: baseOpacity,
-          roughness: 0.5,
-        });
+        geo = new THREE.ShapeGeometry(buildLeisureShape(), 36);
+        mat = new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture("leisure"), transparent: true, opacity: 0.9, roughness: 0.05 });
+        sX = 1;
+        sZ = 1;
+      } else if (isHotTub) {
+        geo = new THREE.ShapeGeometry(buildHotTubShape(), 24);
+        mat = new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture("hot-tub"), transparent: true, opacity: 0.88, roughness: 0.05 });
+        sX = 1;
+        sZ = 1;
+      } else if (isOther) {
+        geo = new THREE.PlaneGeometry(1, 1);
+        mat = new THREE.MeshStandardMaterial({ color: 0xd6e4ee, transparent: true, opacity: 0.85, roughness: 0.4 });
       } else {
-        geometry = new THREE.PlaneGeometry(1, 1);
-        material = new THREE.MeshStandardMaterial({
-          map: makeLaneWaterTexture(zone.width, zone.depth, zone.poolLength === 50 ? "comp" : "rec"),
+        geo = new THREE.PlaneGeometry(1, 1);
+        mat = new THREE.MeshStandardMaterial({
+          map: makeWaterTexture(zone.width, zone.depth, zone.poolLength === 50 ? "comp" : "rec", laneCount),
           transparent: true,
-          opacity: baseOpacity,
-          roughness: 0.12,
+          opacity: 0.92,
+          roughness: 0.06,
         });
       }
 
-      const waterBaseY = hasBasin ? -(basinDepth - 0.05) : 0.02;
-      if (hasBasin) {
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f5, roughness: 0.6 });
-        const basinFloor = new THREE.Mesh(
-          geometry.clone(),
-          new THREE.MeshStandardMaterial({ color: 0xe0f2fe, roughness: 0.5 }),
-        );
+      // Basin floor + coping
+      if (!isOther) {
+        const basinFloorMat = new THREE.MeshStandardMaterial({
+          color: zone.poolLength === 50 ? 0xa8daf5 : zone.shape === "leisure" ? 0xbfeefc : 0xbce5f7,
+          roughness: 0.5,
+        });
+        const basinFloor = new THREE.Mesh(geo.clone(), basinFloorMat);
         basinFloor.rotation.x = -Math.PI / 2;
-        basinFloor.scale.set(scaleX, 1, scaleZ);
-        basinFloor.position.set(zone.x, -basinDepth, zone.z);
+        basinFloor.scale.set(sX, 1, sZ);
+        basinFloor.position.set(zone.x, deckY - bDepth, zone.z);
         scene.add(basinFloor);
-        if (zone.shape === "ellipse") {
-          const cylinderWall = new THREE.Mesh(
-            new THREE.CylinderGeometry(scaleX, scaleX, basinDepth, 48, 1, true),
-            wallMat,
-          );
-          cylinderWall.position.set(zone.x, -basinDepth / 2, zone.z);
-          scene.add(cylinderWall);
-        } else if (zone.shape !== "leisure") {
-          const halfW = zone.width / 2;
-          const halfD = zone.depth / 2;
-          const wt = 0.04;
 
-          const nWall = new THREE.Mesh(new THREE.BoxGeometry(zone.width + wt * 2, basinDepth, wt), wallMat);
-          nWall.position.set(zone.x, -basinDepth / 2, zone.z - halfD);
-          scene.add(nWall);
-          const sWall = nWall.clone();
-          sWall.position.set(zone.x, -basinDepth / 2, zone.z + halfD);
-          scene.add(sWall);
-          const eWall = new THREE.Mesh(new THREE.BoxGeometry(wt, basinDepth, zone.depth + wt * 2), wallMat);
-          eWall.position.set(zone.x + halfW, -basinDepth / 2, zone.z);
-          scene.add(eWall);
-          const wWall = eWall.clone();
-          wWall.position.set(zone.x - halfW, -basinDepth / 2, zone.z);
-          scene.add(wWall);
+        const copeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+        if (zone.shape === "rect") {
+          const ct = 0.12;
+          const hW = zone.width / 2 + ct / 2;
+          const hD = zone.depth / 2 + ct / 2;
+          const cn = new THREE.Mesh(new THREE.BoxGeometry(zone.width + ct * 2, 0.05, ct), copeMat);
+          cn.position.set(zone.x, deckY + 0.01, zone.z - hD);
+          scene.add(cn);
+          const cs = cn.clone();
+          cs.position.set(zone.x, deckY + 0.01, zone.z + hD);
+          scene.add(cs);
+          const ce = new THREE.Mesh(new THREE.BoxGeometry(ct, 0.05, zone.depth + ct * 2), copeMat);
+          ce.position.set(zone.x + hW, deckY + 0.01, zone.z);
+          scene.add(ce);
+          const cw = ce.clone();
+          cw.position.set(zone.x - hW, deckY + 0.01, zone.z);
+          scene.add(cw);
+        } else if (zone.shape === "leisure") {
+          const rimExtrude = new THREE.ExtrudeGeometry(buildLeisureShape(), { depth: 0.04, bevelEnabled: false });
+          const leisureRim = new THREE.Mesh(rimExtrude, copeMat);
+          leisureRim.rotation.x = -Math.PI / 2;
+          leisureRim.position.set(zone.x, deckY + 0.01, zone.z);
+          scene.add(leisureRim);
+        } else {
+          const rimExtrude = new THREE.ExtrudeGeometry(buildHotTubShape(), { depth: 0.04, bevelEnabled: false });
+          const htRim = new THREE.Mesh(rimExtrude, copeMat);
+          htRim.rotation.x = -Math.PI / 2;
+          htRim.position.set(zone.x, deckY + 0.01, zone.z);
+          scene.add(htRim);
         }
       }
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.scale.set(scaleX, 1, scaleZ);
-      mesh.position.set(zone.x, waterBaseY, zone.z);
-      mesh.userData.zoneKey = zone.key;
-      scene.add(mesh);
-      zoneMeshes.push(mesh);
-      baseOpacities.push(baseOpacity);
-      waterBaseYs.push(waterBaseY);
+      // Water surface
+      const waterMesh = new THREE.Mesh(geo, mat);
+      waterMesh.rotation.x = -Math.PI / 2;
+      waterMesh.scale.set(sX, 1, sZ);
+      waterMesh.position.set(zone.x, wBaseY, zone.z);
+      waterMesh.userData.zoneKey = zone.key;
+      scene.add(waterMesh);
+      zoneMeshes.push(waterMesh);
+      if (!isOther) waterAnimations.push({ mesh: waterMesh, baseY: wBaseY, type: zone.shape });
 
-      // Soft architectural white edge line.
-      const borderOutline = new THREE.Mesh(
-        geometry.clone(),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }),
-      );
-      borderOutline.rotation.x = -Math.PI / 2;
-      borderOutline.scale.set(scaleX * 1.04, 1, scaleZ * 1.04);
-      borderOutline.position.set(zone.x, 0.005, zone.z);
-      scene.add(borderOutline);
+      // ---- Lap pool: ropes, blocks, ladders, features ----
+      if (zone.shape === "rect" && zone.poolLength) {
+        const halfW = zone.width / 2;
+        const halfD = zone.depth / 2;
+        const laneSpan = along === "z" ? zone.width : zone.depth;
+        const laneLen = along === "z" ? zone.depth : zone.width;
+        const ropeTex = makeRopeTexture(zone.poolLength === 50 ? "#e11d48" : "#2563eb");
 
-      // Clean interactive ring.
-      const ripple = new THREE.Mesh(
-        new THREE.RingGeometry(0.96, 1.0, 48),
-        new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4, depthWrite: false }),
-      );
-      ripple.rotation.x = -Math.PI / 2;
-      ripple.scale.set(scaleX, 1, scaleZ);
-      ripple.position.set(zone.x, 0.01, zone.z);
-      ripple.visible = false;
-      scene.add(ripple);
-      rippleMeshes.push(ripple);
-      rippleScales.push({ x: scaleX, z: scaleZ });
+        for (let i = 1; i < laneCount; i++) {
+          const off = -laneSpan / 2 + (laneSpan * i) / laneCount;
+          const rope = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.024, 0.024, laneLen - 0.08, 6),
+            new THREE.MeshStandardMaterial({ map: ropeTex.clone(), roughness: 0.5 }),
+          );
+          rope.rotation.z = Math.PI / 2;
+          if (along === "z") {
+            rope.rotation.y = Math.PI / 2;
+            rope.position.set(zone.x + off, wBaseY + 0.03, zone.z);
+          } else {
+            rope.position.set(zone.x, wBaseY + 0.03, zone.z + off);
+          }
+          scene.add(rope);
+        }
 
-      // Pill label + optional session-count badge.
-      const label = makeLabelSprite(zone.label);
-      label.position.set(zone.x, 0.45, zone.z - zone.depth / 2 - 0.2);
-      scene.add(label);
+        // Starting blocks
+        const blockBaseMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.5 });
+        const blockPlankMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.4 });
+        for (let i = 0; i < laneCount; i++) {
+          const off = -laneSpan / 2 + laneSpan * ((i + 0.5) / laneCount);
+          const blockGroup = new THREE.Group();
+          const baseBlock = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), blockBaseMat);
+          baseBlock.position.y = deckY + 0.09;
+          const plankBlock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.22), blockPlankMat);
+          plankBlock.position.y = deckY + 0.19;
+          plankBlock.rotation.x = 0.12;
+          blockGroup.add(baseBlock, plankBlock);
+          if (along === "z") {
+            blockGroup.position.set(zone.x + off, 0, zone.z - halfD - 0.1);
+          } else {
+            blockGroup.rotation.y = Math.PI / 2;
+            blockGroup.position.set(zone.x - halfW - 0.1, 0, zone.z + off);
+          }
+          scene.add(blockGroup);
+        }
 
+        // Grab-rail ladders on the far corners of every lap pool.
+        const cornerA = buildLadder();
+        const cornerB = buildLadder();
+        if (along === "z") {
+          cornerA.position.set(zone.x - halfW + 0.25, deckY, zone.z + halfD - 0.05);
+          cornerB.position.set(zone.x + halfW - 0.25, deckY, zone.z + halfD - 0.05);
+        } else {
+          cornerA.rotation.y = Math.PI / 2;
+          cornerB.rotation.y = Math.PI / 2;
+          cornerA.position.set(zone.x + halfW - 0.05, deckY, zone.z - halfD + 0.25);
+          cornerB.position.set(zone.x + halfW - 0.05, deckY, zone.z + halfD - 0.25);
+        }
+        scene.add(cornerA, cornerB);
+
+        // 50m pool: diving tower. 25m pool: basketball hoop.
+        if (zone.poolLength === 50) {
+          const dTower = buildDivingTower();
+          dTower.position.set(zone.x, deckY, zone.z - halfD + 0.15);
+          scene.add(dTower);
+        }
+        if (zone.poolLength === 25) {
+          const bHoop = buildBasketballHoop();
+          bHoop.position.set(zone.x - halfW - 0.15, deckY, zone.z);
+          bHoop.rotation.y = Math.PI / 2;
+          scene.add(bHoop);
+        }
+      }
+
+      // ---- Leisure pool: island, stairs, fountains, lift, ledge seats ----
+      if (zone.shape === "leisure") {
+        const stairs = buildPoolStairs(4, 0.5, 0.4, bDepth - 0.06);
+        stairs.position.set(zone.x - 1.9, deckY, zone.z + 0.3);
+        stairs.rotation.y = Math.PI / 2;
+        scene.add(stairs);
+
+        const islandShape = new THREE.Shape();
+        islandShape.moveTo(-1.0, 0.5);
+        islandShape.quadraticCurveTo(-0.4, 0.5, -0.4, -0.1);
+        islandShape.quadraticCurveTo(-0.4, -0.6, -0.9, -0.6);
+        islandShape.quadraticCurveTo(-1.2, -0.4, -1.1, 0.0);
+        islandShape.closePath();
+        const islandExtrude = new THREE.ExtrudeGeometry(islandShape, { depth: bDepth + 0.04, bevelEnabled: false });
+        const islandMesh = new THREE.Mesh(islandExtrude, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
+        islandMesh.rotation.x = -Math.PI / 2;
+        islandMesh.position.set(zone.x, deckY - bDepth, zone.z);
+        scene.add(islandMesh);
+
+        const spout1 = buildFountainSpout(0.28, 0);
+        spout1.position.set(zone.x - 1.0, deckY, zone.z + 0.8);
+        const spout2 = buildFountainSpout(0.24, Math.PI * 0.25);
+        spout2.position.set(zone.x - 0.3, deckY, zone.z + 0.4);
+        scene.add(spout1, spout2);
+
+        const lLift = buildAquaticLift();
+        lLift.position.set(zone.x - 0.3, deckY, zone.z - 1.3);
+        lLift.rotation.y = -Math.PI * 0.7;
+        scene.add(lLift);
+
+        // Submerged ledge seats around the inner edge.
+        const ledgeMat = new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.55 });
+        for (const [lx, lz] of [
+          [0.55, 1.0],
+          [0.55, 0.4],
+          [-1.9, -0.6],
+        ] as [number, number][]) {
+          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.2), ledgeMat);
+          ledge.position.set(zone.x + lx, deckY - bDepth + 0.14, zone.z + lz);
+          scene.add(ledge);
+        }
+      }
+
+      // ---- Hot tub: stairs, lift, ring of inner ledge seats, jets ----
+      if (isHotTub) {
+        const htStairs = buildPoolStairs(3, 0.4, 0.3, bDepth - 0.06);
+        htStairs.position.set(zone.x + 0.3, deckY, zone.z + 0.4);
+        htStairs.rotation.y = -Math.PI / 4;
+        scene.add(htStairs);
+
+        const htLift = buildAquaticLift();
+        htLift.position.set(zone.x + 0.45, deckY, zone.z - 0.1);
+        htLift.rotation.y = -Math.PI * 0.4;
+        scene.add(htLift);
+
+        // Warm inner ledge bench following the tub edge.
+        const benchMat = new THREE.MeshStandardMaterial({ color: 0xfde3c4, roughness: 0.6 });
+        for (const [bx, bz] of [
+          [-0.3, 0.45],
+          [0.35, 0.35],
+          [-0.3, -0.35],
+        ] as [number, number][]) {
+          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.09, 0.16), benchMat);
+          ledge.position.set(zone.x + bx, deckY - bDepth + 0.12, zone.z + bz);
+          scene.add(ledge);
+        }
+        // Bubbling jets.
+        const jetMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+        for (const [jx, jz] of [
+          [0.0, 0.0],
+          [-0.15, 0.15],
+          [0.15, -0.1],
+        ] as [number, number][]) {
+          const jet = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), jetMat);
+          jet.position.set(zone.x + jx, wBaseY + 0.02, zone.z + jz);
+          scene.add(jet);
+        }
+      }
+
+      // ---- Labels ----
+      const pillLabel = makeLabelSprite(zone.label);
+      pillLabel.position.set(zone.x, deckY + 1.1, zone.z - zone.depth / 2 - 0.2);
+      scene.add(pillLabel);
       if (zone.count > 0) {
-        const badge = makeLabelSprite(String(zone.count), {
-          bg: "#4f46e5",
-          fg: "#ffffff",
-          w: 80,
-          h: 80,
-          isBadge: true,
-        });
-        badge.position.set(zone.x + zone.width / 2 - 0.1, 0.5, zone.z + zone.depth / 2 - 0.1);
-        scene.add(badge);
+        const counterBadge = makeLabelSprite(String(zone.count), { bg: "#7c3aed", fg: "#ffffff", w: 84, h: 84, isBadge: true });
+        counterBadge.position.set(zone.x + zone.width / 2 - 0.1, deckY + 1.15, zone.z + zone.depth / 2 - 0.1);
+        scene.add(counterBadge);
       }
     }
-
     zoneMeshesRef.current = zoneMeshes;
-    rippleMeshesRef.current = rippleMeshes;
-    rippleScalesRef.current = rippleScales;
-    baseOpacitiesRef.current = baseOpacities;
-    waterBaseYsRef.current = waterBaseYs;
 
-    const avatar = buildAvatar();
-    avatar.position.copy(avatarPosRef.current);
-    scene.add(avatar);
-    avatarGroupRef.current = avatar;
+    // ---- Poolside furnishings ----
+    for (let i = 0; i < 5; i++) {
+      const bench = buildBench();
+      bench.position.set(-6.8 + i * 1.35, deckY, dMinZ + 0.4);
+      scene.add(bench);
+    }
+    const primaryGuardChair = buildLifeguardChair();
+    primaryGuardChair.position.set(-1.6, deckY, -0.4);
+    primaryGuardChair.rotation.y = Math.PI / 4;
+    scene.add(primaryGuardChair);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (!AVATAR_KEYS.has(key)) return;
-      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) e.preventDefault();
-      keysRef.current.add(key);
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keysRef.current.delete(e.key.toLowerCase());
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    const resize = () => {
+    // ---- Interaction ----
+    const handleResize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
       if (w === 0 || h === 0) return;
@@ -510,107 +781,97 @@ export default function AquaticCenterScene({
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
-    window.addEventListener("resize", resize);
-    resize();
+    window.addEventListener("resize", handleResize);
+    handleResize();
 
     const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const pickZoneAt = (clientX: number, clientY: number): string | null => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(zoneMeshesRef.current, false);
-      return hits.length > 0 ? (hits[0].object.userData.zoneKey as string) : null;
+    const cursorVector = new THREE.Vector2();
+    const queryZoneHit = (clientX: number, clientY: number): string | null => {
+      const boundary = renderer.domElement.getBoundingClientRect();
+      cursorVector.x = ((clientX - boundary.left) / boundary.width) * 2 - 1;
+      cursorVector.y = -((clientY - boundary.top) / boundary.height) * 2 + 1;
+      raycaster.setFromCamera(cursorVector, camera);
+      const intersections = raycaster.intersectObjects(zoneMeshesRef.current, false);
+      return intersections.length > 0 ? (intersections[0].object.userData.zoneKey as string) : null;
     };
 
-    let downPos: { x: number; y: number } | null = null;
-    const handlePointerDown = (e: PointerEvent) => {
-      downPos = { x: e.clientX, y: e.clientY };
+    let pointerOrigin: { x: number; y: number } | null = null;
+    const onPointerDown = (e: PointerEvent) => {
+      pointerOrigin = { x: e.clientX, y: e.clientY };
     };
-    const handlePointerUp = (e: PointerEvent) => {
-      if (!downPos) return;
-      if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 5) return;
-      const key = pickZoneAt(e.clientX, e.clientY);
-      if (key && stateRef.current.onPickZone) stateRef.current.onPickZone(key);
+    const onPointerUp = (e: PointerEvent) => {
+      if (!pointerOrigin) return;
+      if (Math.hypot(e.clientX - pointerOrigin.x, e.clientY - pointerOrigin.y) > 4) return;
+      const zoneKey = queryZoneHit(e.clientX, e.clientY);
+      if (zoneKey && stateRef.current.onPickZone) stateRef.current.onPickZone(zoneKey);
     };
-    const handlePointerMove = (e: PointerEvent) => {
-      const key = pickZoneAt(e.clientX, e.clientY);
-      renderer.domElement.style.cursor = key ? "pointer" : "grab";
-      if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(key);
+    const onPointerMove = (e: PointerEvent) => {
+      const zoneKey = queryZoneHit(e.clientX, e.clientY);
+      renderer.domElement.style.cursor = zoneKey ? "pointer" : "grab";
+      if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(zoneKey);
     };
-    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
-    renderer.domElement.addEventListener("pointerup", handlePointerUp);
-    renderer.domElement.addEventListener("pointermove", handlePointerMove);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
 
-    let rafId = 0;
-    const tick = () => {
-      rafId = requestAnimationFrame(tick);
-      const { activeZoneKey: curActive, focusZoneKey: curFocus } = stateRef.current;
+    // ---- Loop ----
+    const animationClock = new THREE.Clock();
+    let frameRequestCallbackId = 0;
+    const executeFrameTick = () => {
+      frameRequestCallbackId = requestAnimationFrame(executeFrameTick);
+      const elapsed = animationClock.getElapsedTime();
+      const { activeZoneKey: hoverKey, focusZoneKey: targetFocusKey } = stateRef.current;
 
-      // Animate active/hover states smoothly.
-      zoneMeshes.forEach((mesh, idx) => {
-        const isHovered = mesh.userData.zoneKey === curActive;
-        const targetY = isHovered ? waterBaseYs[idx] + 0.04 : waterBaseYs[idx];
-        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, targetY, 0.15);
+      for (const { mesh, baseY, type } of waterAnimations) {
+        const isHovered = mesh.userData.zoneKey === hoverKey;
+        const speed = type === "leisure" ? 1.9 : 1.4;
+        const amp = type === "leisure" ? 0.015 : 0.01;
+        const fluidWaveBob = Math.sin(elapsed * speed + mesh.position.x * 1.5) * amp;
+        const targetClampedY = baseY + fluidWaveBob + (isHovered ? 0.05 : 0);
+        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, targetClampedY, 0.16);
+        const meshMat = mesh.material as THREE.MeshStandardMaterial;
+        meshMat.opacity = THREE.MathUtils.lerp(meshMat.opacity, isHovered ? 0.96 : 0.9, 0.16);
+      }
 
-        const ripple = rippleMeshes[idx];
-        if (ripple) {
-          ripple.visible = isHovered;
-          if (isHovered) {
-            const cycle = (performance.now() % 1200) / 1200;
-            ripple.scale.set(rippleScales[idx].x * (1 + cycle * 0.08), 1, rippleScales[idx].z * (1 + cycle * 0.08));
-            (ripple.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - cycle);
-          }
-        }
-      });
-
-      // Camera easing focus.
-      if (curFocus !== appliedFocusKey) {
-        appliedFocusKey = curFocus;
-        const targetZone = zones.find((z) => z.key === curFocus);
-        const targetPos = targetZone
-          ? new THREE.Vector3(targetZone.x, 6.5, targetZone.z + 4.5)
-          : DEFAULT_CAM_POS.clone();
-        const targetLook = targetZone ? new THREE.Vector3(targetZone.x, 0, targetZone.z) : DEFAULT_TARGET.clone();
-
+      if (targetFocusKey !== appliedFocusKey) {
+        appliedFocusKey = targetFocusKey;
+        const focusedZone = zones.find((z) => z.key === targetFocusKey);
+        const destinationPos = focusedZone ? new THREE.Vector3(focusedZone.x, 7.0, focusedZone.z + 5.5) : DEFAULT_CAM_POS.clone();
+        const destinationLookAt = focusedZone ? new THREE.Vector3(focusedZone.x, 0, focusedZone.z) : DEFAULT_TARGET.clone();
         transition = {
           from: camera.position.clone(),
           fromTarget: controls.target.clone(),
-          to: targetPos,
-          toTarget: targetLook,
+          to: destinationPos,
+          toTarget: destinationLookAt,
           start: performance.now(),
           duration: 500,
         };
       }
       if (transition) {
         const progress = Math.min(1, (performance.now() - transition.start) / transition.duration);
-        const ease = progress * (2 - progress); // subtle quadratic ease-out
-        camera.position.lerpVectors(transition.from, transition.to, ease);
-        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, ease);
+        const smoothFactor = progress * (2 - progress);
+        camera.position.lerpVectors(transition.from, transition.to, smoothFactor);
+        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, smoothFactor);
         if (progress === 1) transition = null;
       }
 
       controls.update();
       renderer.render(scene, camera);
     };
-    tick();
+    executeFrameTick();
 
     return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("resize", resize);
-      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
-      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
-      renderer.domElement.removeEventListener("pointermove", handlePointerMove);
+      cancelAnimationFrame(frameRequestCallbackId);
+      window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
       controls.dispose();
-      scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          const material = obj.material;
-          if (Array.isArray(material)) material.forEach((m) => m.dispose());
-          else material.dispose();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) object.material.forEach((m) => m.dispose());
+          else object.material.dispose();
         }
       });
       renderer.dispose();
