@@ -12,7 +12,7 @@ export default function ScheduleView({
 }) {
   const groupedByDay = useMemo(() => {
     const filtered = events.filter((ev) => {
-      const isFifty = ev.title.toLowerCase().includes("50m");
+      const isFifty = (ev.title ?? "").toLowerCase().includes("50m");
       if (filter === "25m") return !isFifty;
       if (filter === "50m") return isFifty;
       return true;

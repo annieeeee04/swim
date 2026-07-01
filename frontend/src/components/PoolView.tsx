@@ -39,7 +39,7 @@ function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
   const slotMap = new Map<string, Slot>();
   for (const ev of events) {
     const key = `${ev.start}|${ev.end}`;
-    const length: 25 | 50 = ev.title.toLowerCase().includes("50m") ? 50 : 25;
+    const length: 25 | 50 = (ev.title ?? "").toLowerCase().includes("50m") ? 50 : 25;
     const existing = slotMap.get(key);
     if (existing) {
       if (!existing.lengths.includes(length)) existing.lengths.push(length);

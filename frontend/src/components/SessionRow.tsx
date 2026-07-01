@@ -1,8 +1,8 @@
 import type { SwimEvent } from "../types";
 import { formatTime } from "../utils/time";
 
-function poolEmoji(facilityName: string): string {
-  const name = facilityName.toLowerCase();
+function poolEmoji(facilityName: string | null | undefined): string {
+  const name = (facilityName ?? "").toLowerCase();
   if (name.includes("recreation")) return "🔵";
   if (name.includes("leisure")) return "🟢";
   if (name.includes("competition") || name.includes("comp")) return "🟣";
@@ -10,8 +10,9 @@ function poolEmoji(facilityName: string): string {
 }
 
 export default function SessionRow({ event }: { event: SwimEvent }) {
-  const isFifty = event.title.toLowerCase().includes("50m");
-  const isCommunityNight = event.title.toLowerCase().includes("community night");
+  const title = event.title ?? "";
+  const isFifty = title.toLowerCase().includes("50m");
+  const isCommunityNight = title.toLowerCase().includes("community night");
 
   return (
     <li className="session glass-surface" data-glass>

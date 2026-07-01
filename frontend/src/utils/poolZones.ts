@@ -1,7 +1,7 @@
 import type { SwimEvent } from "../types";
 
 export function isFiftyMeter(event: SwimEvent): boolean {
-  return event.title.toLowerCase().includes("50m");
+  return (event.title ?? "").toLowerCase().includes("50m");
 }
 
 /** A real, named pool/zone at the aquatic centre (not a numbered lane).
@@ -24,8 +24,9 @@ export interface ZoneClassification {
 /** Maps a raw facilityName string to one of the aquatic centre's real zones.
  *  Falls back to an "other" zone (keyed by the raw name) for anything that
  *  doesn't match a known pool, rather than inventing fake lane numbers. */
-export function classifyZone(facilityName: string): ZoneClassification {
-  const name = facilityName.toLowerCase();
+export function classifyZone(facilityName: string | null | undefined): ZoneClassification {
+  const raw = facilityName ?? "";
+  const name = raw.toLowerCase();
   if (name.includes("leisure")) {
     return { key: "leisure", label: "Leisure Pool", poolLength: null };
   }
@@ -40,7 +41,7 @@ export function classifyZone(facilityName: string): ZoneClassification {
   if (name.includes("rec")) {
     return { key: "recreation", label: "Recreation Pool", poolLength: 25 };
   }
-  return { key: `other:${facilityName}`, label: facilityName, poolLength: null };
+  return { key: `other:${raw}`, label: raw, poolLength: null };
 }
 
 /** "2026-06-21 07:30:00" -> "2026-06-21" */

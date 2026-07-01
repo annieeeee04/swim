@@ -1,8 +1,10 @@
 export interface SwimEvent {
   eventId: string;
-  title: string;
+  // The UBC feed can occasionally return null/absent title or facilityName,
+  // so these are nullable and every consumer guards before using them.
+  title?: string | null;
   serviceName: string;
-  facilityName: string;
+  facilityName?: string | null;
   facilityType?: string | null;
   start: string; // "yyyy-MM-dd HH:mm:ss" in America/Vancouver local time
   end: string;
