@@ -31,16 +31,19 @@ function Swatches({
     <div className="designer-row">
       <span className="designer-label">{label}</span>
       <div className="designer-swatches">
-        {colors.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className={`designer-swatch ${activeColor === c.toLowerCase() ? "active" : ""}`}
-            style={{ background: c }}
-            onClick={() => onPick(c)}
-            aria-label={`${label} ${c}`}
-          />
-        ))}
+        {colors.map((c, i) => {
+          if (!c) return null; // guard against undefined/null in the color list
+          return (
+            <button
+              key={c ?? i}
+              type="button"
+              className={`designer-swatch ${activeColor === c.toLowerCase() ? "active" : ""}`}
+              style={{ background: c }}
+              onClick={() => onPick(c)}
+              aria-label={`${label} ${c}`}
+            />
+          );
+        })}
         <label className="designer-custom" style={{ background: active }}>
           <input
             type="color"
