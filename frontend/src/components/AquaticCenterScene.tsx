@@ -346,6 +346,22 @@ function buildBasketballHoop(): THREE.Group {
   return hoop;
 }
 
+/** A floating swim ring (inner tube) toy. */
+function buildSwimRing(color: number): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.TorusGeometry(0.15, 0.055, 10, 22),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.4 }),
+  );
+}
+
+/** A floating beach-ball toy. */
+function buildBeachBall(color: number): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(0.1, 16, 16),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.35 }),
+  );
+}
+
 /** Stainless grab-rail / ladder handle on a pool edge. */
 function buildLadder(): THREE.Group {
   const g = new THREE.Group();
@@ -642,72 +658,117 @@ export default function AquaticCenterScene({
           scene.add(blockGroup);
         }
 
-        // Grab-rail ladders on the far corners of every lap pool.
-        const cornerA = buildLadder();
-        const cornerB = buildLadder();
-        if (along === "z") {
-          cornerA.position.set(zone.x - halfW + 0.25, deckY, zone.z + halfD - 0.05);
-          cornerB.position.set(zone.x + halfW - 0.25, deckY, zone.z + halfD - 0.05);
-        } else {
-          cornerA.rotation.y = Math.PI / 2;
-          cornerB.rotation.y = Math.PI / 2;
-          cornerA.position.set(zone.x + halfW - 0.05, deckY, zone.z - halfD + 0.25);
-          cornerB.position.set(zone.x + halfW - 0.05, deckY, zone.z + halfD - 0.25);
+        // Grab-rail ladders on the LEFT and RIGHT long sides of the pool
+        // (two per side), not on the ends.
+        for (const sideX of [zone.x - halfW + 0.04, zone.x + halfW - 0.04]) {
+          for (const lz of [zone.z - zone.depth * 0.24, zone.z + zone.depth * 0.24]) {
+            const lad = buildLadder();
+            lad.rotation.y = Math.PI / 2;
+            lad.position.set(sideX, deckY, lz);
+            scene.add(lad);
+          }
         }
-        scene.add(cornerA, cornerB);
 
-        // 50m pool: diving tower. 25m pool: basketball hoop.
-        if (zone.poolLength === 50) {
+        // Diving tower belongs to the DEEP 25m Recreation pool (4.5m), NOT the
+        // shallow 50m Competition pool (2.3m).
+        if (zone.poolLength === 25) {
           const dTower = buildDivingTower();
           dTower.position.set(zone.x, deckY, zone.z - halfD + 0.15);
           scene.add(dTower);
         }
-        if (zone.poolLength === 25) {
-          const bHoop = buildBasketballHoop();
-          bHoop.position.set(zone.x - halfW - 0.15, deckY, zone.z);
-          bHoop.rotation.y = Math.PI / 2;
-          scene.add(bHoop);
-        }
       }
 
-      // ---- Leisure pool: island, stairs, fountains, lift, ledge seats ----
+      // ---- Leisure pool: kids' play area (left, bigger) + warm pool (right) ----
       if (zone.shape === "leisure") {
+        // Entry stairs on the far left.
         const stairs = buildPoolStairs(4, 0.5, 0.4, bDepth - 0.06);
         stairs.position.set(zone.x - 1.9, deckY, zone.z + 0.3);
         stairs.rotation.y = Math.PI / 2;
         scene.add(stairs);
 
+        // Central white play/fountain island (the curved "C" structure).
         const islandShape = new THREE.Shape();
         islandShape.moveTo(-1.0, 0.5);
         islandShape.quadraticCurveTo(-0.4, 0.5, -0.4, -0.1);
         islandShape.quadraticCurveTo(-0.4, -0.6, -0.9, -0.6);
         islandShape.quadraticCurveTo(-1.2, -0.4, -1.1, 0.0);
         islandShape.closePath();
-        const islandExtrude = new THREE.ExtrudeGeometry(islandShape, { depth: bDepth + 0.04, bevelEnabled: false });
+        const islandExtrude = new THREE.ExtrudeGeometry(islandShape, { depth: bDepth + 0.05, bevelEnabled: false });
         const islandMesh = new THREE.Mesh(islandExtrude, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
         islandMesh.rotation.x = -Math.PI / 2;
-        islandMesh.position.set(zone.x, deckY - bDepth, zone.z);
+        islandMesh.position.set(zone.x - 0.6, deckY - bDepth, zone.z);
         scene.add(islandMesh);
 
+        // Fountain sprays over the kids' area.
         const spout1 = buildFountainSpout(0.28, 0);
-        spout1.position.set(zone.x - 1.0, deckY, zone.z + 0.8);
+        spout1.position.set(zone.x - 1.2, deckY, zone.z + 0.7);
         const spout2 = buildFountainSpout(0.24, Math.PI * 0.25);
-        spout2.position.set(zone.x - 0.3, deckY, zone.z + 0.4);
+        spout2.position.set(zone.x - 0.9, deckY, zone.z - 0.3);
         scene.add(spout1, spout2);
 
-        const lLift = buildAquaticLift();
-        lLift.position.set(zone.x - 0.3, deckY, zone.z - 1.3);
-        lLift.rotation.y = -Math.PI * 0.7;
-        scene.add(lLift);
+        // TWO basketball stands in the middle of the play pool.
+        const hoopA = buildBasketballHoop();
+        hoopA.position.set(zone.x - 0.5, deckY, zone.z + 0.55);
+        hoopA.rotation.y = -Math.PI / 2;
+        const hoopB = buildBasketballHoop();
+        hoopB.position.set(zone.x - 0.5, deckY, zone.z - 0.6);
+        hoopB.rotation.y = Math.PI / 2;
+        scene.add(hoopA, hoopB);
 
-        // Submerged ledge seats around the inner edge.
-        const ledgeMat = new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.55 });
-        for (const [lx, lz] of [
-          [0.55, 1.0],
-          [0.55, 0.4],
-          [-1.9, -0.6],
+        // Swim rings + beach-ball toys floating on the kids' side.
+        const ringSpecs: [number, number, number][] = [
+          [0xff5a5f, -1.5, 0.7],
+          [0xffd23f, -1.9, -0.2],
+          [0x3fa7ff, -1.3, -0.7],
+        ];
+        for (const [color, rx, rz] of ringSpecs) {
+          const ring = buildSwimRing(color);
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(zone.x + rx, wBaseY + 0.03, zone.z + rz);
+          scene.add(ring);
+        }
+        const ballSpecs: [number, number, number][] = [
+          [0xff8c42, -1.7, 0.2],
+          [0x6bcb77, -1.1, 0.9],
+        ];
+        for (const [color, bx, bz] of ballSpecs) {
+          const ball = buildBeachBall(color);
+          ball.position.set(zone.x + bx, wBaseY + 0.09, zone.z + bz);
+          scene.add(ball);
+        }
+
+        // ---- split the pool: white divider + warm hot-pool on the right ----
+        const dividerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+        const divider = new THREE.Mesh(new THREE.BoxGeometry(0.1, bDepth + 0.18, 1.9), dividerMat);
+        divider.position.set(zone.x + 0.32, deckY - bDepth / 2 + 0.06, zone.z);
+        scene.add(divider);
+
+        const warm = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.72, 1.7),
+          new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture("hot-tub"), transparent: true, opacity: 0.92, roughness: 0.05 }),
+        );
+        warm.rotation.x = -Math.PI / 2;
+        warm.position.set(zone.x + 0.55, wBaseY + 0.008, zone.z);
+        scene.add(warm);
+
+        const warmJetMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+        for (const [jx, jz] of [
+          [0.5, 0.4],
+          [0.62, -0.1],
+          [0.5, -0.55],
         ] as [number, number][]) {
-          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.2), ledgeMat);
+          const jet = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), warmJetMat);
+          jet.position.set(zone.x + jx, wBaseY + 0.03, zone.z + jz);
+          scene.add(jet);
+        }
+
+        // Warm-corner ledge seats.
+        const ledgeMat = new THREE.MeshStandardMaterial({ color: 0xfde3c4, roughness: 0.55 });
+        for (const [lx, lz] of [
+          [0.6, 0.55],
+          [0.6, -0.5],
+        ] as [number, number][]) {
+          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.09, 0.16), ledgeMat);
           ledge.position.set(zone.x + lx, deckY - bDepth + 0.14, zone.z + lz);
           scene.add(ledge);
         }
