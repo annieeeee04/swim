@@ -1,7 +1,7 @@
 import type { SwimEvent } from "../types";
 
 export function isFiftyMeter(event: SwimEvent): boolean {
-  return event.title.toLowerCase().includes("50m");
+    return (event.title ?? "").toLowerCase().includes("50m");
 }
 
 /** A real, named pool/zone at the aquatic centre (not a numbered lane).
