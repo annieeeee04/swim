@@ -81,7 +81,7 @@ export default function AuthScreen() {
     }
   }
 
-  async function handleSocial(provider: "google" | "instagram") {
+  async function handleSocial(provider: "google" | "facebook") {
     setError(null);
     try {
       const url = await fetchOAuthUrl(provider);
@@ -122,8 +122,8 @@ export default function AuthScreen() {
           <button type="button" className="social-btn" onClick={() => handleSocial("google")}>
             <span className="social-glyph" aria-hidden="true">G</span> Continue with Google
           </button>
-          <button type="button" className="social-btn social-btn-ig" onClick={() => handleSocial("instagram")}>
-            <span className="social-glyph" aria-hidden="true">◎</span> Continue with Instagram
+          <button type="button" className="social-btn social-btn-fb" onClick={() => handleSocial("facebook")}>
+            <span className="social-glyph" aria-hidden="true">f</span> Login with Facebook
           </button>
         </div>
 

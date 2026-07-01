@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
- * Third-party login (Google / Instagram) — SCAFFOLD.
+ * Third-party login (Google / Facebook).
  *
  * The full OAuth dance is wired here: the frontend asks for an authorize URL,
  * sends the user to the provider, the provider redirects back to
@@ -31,17 +31,15 @@ import java.util.UUID;
  * code for a profile and mint our own app token.
  *
  * ───────────────────────────────────────────────────────────────────────────
- * TODO (you finish — needs real credentials):
+ * Setup (needs real credentials):
  *   1. Register an app with each provider and obtain client id + secret.
  *   2. Add the redirect URI {scheme}://{host}/api/auth/oauth/{provider}/callback
  *      to the provider's allowed redirect list.
  *   3. Fill these in application.properties (or env vars):
  *        app.oauth.google.client-id / client-secret
- *        app.oauth.instagram.client-id / client-secret
+ *        app.oauth.facebook.client-id / client-secret
  *        app.oauth.redirect-base   (public base URL of THIS backend)
  *        app.oauth.frontend-success (SPA URL to land on, e.g. http://localhost:5173)
- *   NOTE: Instagram Basic Display is deprecated/restricted and returns no email;
- *         treat it as best-effort. Consider "Login with Facebook" instead.
  * ───────────────────────────────────────────────────────────────────────────
  */
 @RestController
@@ -57,10 +55,10 @@ public class OAuthController {
     @Value("${app.oauth.google.client-secret:}")
     private String googleClientSecret;
 
-    @Value("${app.oauth.instagram.client-id:}")
-    private String instagramClientId;
-    @Value("${app.oauth.instagram.client-secret:}")
-    private String instagramClientSecret;
+    @Value("${app.oauth.facebook.client-id:}")
+    private String facebookClientId;
+    @Value("${app.oauth.facebook.client-secret:}")
+    private String facebookClientSecret;
 
     @Value("${app.oauth.redirect-base:http://localhost:8080}")
     private String redirectBase;
@@ -87,13 +85,13 @@ public class OAuthController {
                         + "&state=" + enc(state);
                 return new AuthorizeUrl(url, state);
             }
-            case "instagram" -> {
-                requireConfigured(instagramClientId, "instagram");
-                String url = "https://api.instagram.com/oauth/authorize"
-                        + "?client_id=" + enc(instagramClientId)
+            case "facebook" -> {
+                requireConfigured(facebookClientId, "facebook");
+                String url = "https://www.facebook.com/v18.0/dialog/oauth"
+                        + "?client_id=" + enc(facebookClientId)
                         + "&redirect_uri=" + enc(redirectUri)
                         + "&response_type=code"
-                        + "&scope=" + enc("user_profile")
+                        + "&scope=" + enc("email,public_profile")
                         + "&state=" + enc(state);
                 return new AuthorizeUrl(url, state);
             }
@@ -118,7 +116,7 @@ public class OAuthController {
         try {
             User user = switch (provider.toLowerCase()) {
                 case "google" -> handleGoogle(code, redirectUri);
-                case "instagram" -> handleInstagram(code, redirectUri);
+                case "facebook" -> handleFacebook(code, redirectUri);
                 default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown provider: " + provider);
             };
             String token = auth.issueToken(user);
@@ -151,23 +149,23 @@ public class OAuthController {
         return auth.findOrCreateOAuthUser(User.Provider.GOOGLE, sub, email, name);
     }
 
-    private User handleInstagram(String code, String redirectUri) throws Exception {
-        String form = "client_id=" + enc(instagramClientId)
-                + "&client_secret=" + enc(instagramClientSecret) // TODO: must be set
+    private User handleFacebook(String code, String redirectUri) throws Exception {
+        String form = "client_id=" + enc(facebookClientId)
+                + "&client_secret=" + enc(facebookClientSecret)
                 + "&grant_type=authorization_code"
                 + "&redirect_uri=" + enc(redirectUri)
                 + "&code=" + enc(code);
-        JsonNode tokenJson = postForm("https://api.instagram.com/oauth/access_token", form);
+        JsonNode tokenJson = postForm("https://graph.facebook.com/v18.0/oauth/access_token", form);
         String accessToken = tokenJson.path("access_token").asText(null);
-        String userId = tokenJson.path("user_id").asText(null);
-        if (accessToken == null || userId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "instagram token exchange failed");
+        if (accessToken == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "facebook token exchange failed");
         }
         JsonNode profile = getJson(
-                "https://graph.instagram.com/me?fields=id,username&access_token=" + enc(accessToken), null);
-        String username = profile.path("username").asText("Swimmer");
-        // Instagram Basic Display does not expose email.
-        return auth.findOrCreateOAuthUser(User.Provider.INSTAGRAM, userId, null, username);
+                "https://graph.facebook.com/me?fields=id,name,email", accessToken);
+        String fbId = profile.path("id").asText(null);
+        String name = profile.path("name").asText("Swimmer");
+        String email = profile.path("email").asText(null);
+        return auth.findOrCreateOAuthUser(User.Provider.FACEBOOK, fbId, email, name);
     }
 
     // ---------- tiny HTTP helpers ----------

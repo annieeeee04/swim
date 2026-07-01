@@ -96,8 +96,9 @@
   background: conic-gradient(from -45deg, #ea4335, #fbbc05, #34a853, #4285f4, #ea4335);
 }
 
-.social-btn-ig .social-glyph {
-  background: radial-gradient(circle at 30% 110%, #fdf497, #fd5949 45%, #d6249f 70%, #285aeb 100%);
+.social-btn-fb .social-glyph {
+  background: #1877f2;
+  color: #fff;
 }
 
 .auth-divider {

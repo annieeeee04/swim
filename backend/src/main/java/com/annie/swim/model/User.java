@@ -22,7 +22,7 @@ import java.time.Instant;
 public class User {
 
     public enum Provider {
-        LOCAL, GOOGLE, INSTAGRAM
+        LOCAL, GOOGLE, FACEBOOK
     }
 
     @Id

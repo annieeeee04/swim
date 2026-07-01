@@ -17,33 +17,39 @@ export interface ZoneLayout {
 interface AquaticCenterSceneProps {
   zones: ZoneLayout[];
   activeZoneKey: string | null;
-  /** The currently selected/open zone — the camera eases in toward it. */
   focusZoneKey?: string | null;
   onPickZone?: (key: string) => void;
   onHoverZone?: (key: string | null) => void;
 }
 
-const DEFAULT_CAM_POS = new THREE.Vector3(-1.0, 12, 11);
+const DEFAULT_CAM_POS = new THREE.Vector3(-1.0, 13.5, 12);
 const DEFAULT_TARGET = new THREE.Vector3(-1.0, 0, 0);
 
 function zoneColor(zone: ZoneLayout): number {
-  if (zone.key === "hot-tub") return 0xf59e0b;
-  if (zone.key === "leisure") return 0x14b8a6;
-  if (zone.poolLength === 50) return 0xa855f7;
-  if (zone.poolLength === 25) return 0x38bdf8;
-  return 0x94a3b8;
+  if (zone.key === "hot-tub") return 0xfef3c7;
+  if (zone.key === "leisure") return 0xccfbf1;
+  if (zone.poolLength === 50) return 0xf3e8ff;
+  if (zone.poolLength === 25) return 0xe0f2fe;
+  return 0xf1f5f9;
 }
 
-/** Short text label drawn onto a canvas, used both for the zone-name plate
- *  and the session-count badge. */
-function makeLabelSprite(text: string, opts: { bg?: string; fg?: string; w?: number; h?: number } = {}): THREE.Sprite {
-  const { bg = "rgba(44,35,80,0.82)", fg = "#fff", w = 256, h = 72 } = opts;
+function makeLabelSprite(
+  text: string,
+  opts: { bg?: string; fg?: string; w?: number; h?: number; isBadge?: boolean } = {},
+): THREE.Sprite {
+  const { bg = "rgba(255, 255, 255, 0.92)", fg = "#1e1b4b", w = 280, h = 80, isBadge = false } = opts;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
+
+  // Elegant rounded pill background with a clean, soft shadow.
   const radius = h / 2;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.06)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
   ctx.fillStyle = bg;
+
   ctx.beginPath();
   ctx.moveTo(radius, 0);
   ctx.arcTo(w, 0, w, h, radius);
@@ -52,32 +58,44 @@ function makeLabelSprite(text: string, opts: { bg?: string; fg?: string; w?: num
   ctx.arcTo(0, 0, w, 0, radius);
   ctx.closePath();
   ctx.fill();
+
+  // Reset shadow for crisp text rendering.
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
   ctx.fillStyle = fg;
-  ctx.font = "bold 30px Nunito, sans-serif";
+  ctx.font = isBadge
+    ? "bold 36px system-ui, -apple-system, sans-serif"
+    : "600 26px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, w / 2, h / 2 + 2);
+  ctx.fillText(text, w / 2, h / 2 + 1);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: true, transparent: true });
   const sprite = new THREE.Sprite(material);
-  const scale = 1.4;
-  sprite.scale.set((w / h) * scale * 0.6, scale * 0.6, 1);
+
+  const scale = isBadge ? 0.45 : 0.65;
+  sprite.scale.set((w / h) * scale, scale, 1);
   return sprite;
 }
 
 function makeFloorTexture(): THREE.CanvasTexture {
-  const size = 256;
+  const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#e7e4da";
+
+  // Clean off-white minimalist floor.
+  ctx.fillStyle = "#fcfbfa";
   ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = "#d2cdbb";
-  ctx.lineWidth = 3;
-  const step = size / 6;
-  for (let i = 0; i <= 6; i++) {
+
+  // Subdued, professional thin grid lines.
+  ctx.strokeStyle = "#f1f0ea";
+  ctx.lineWidth = 2;
+  const step = size / 8;
+  for (let i = 0; i <= 8; i++) {
     ctx.beginPath();
     ctx.moveTo(i * step, 0);
     ctx.lineTo(i * step, size);
@@ -87,6 +105,7 @@ function makeFloorTexture(): THREE.CanvasTexture {
     ctx.lineTo(size, i * step);
     ctx.stroke();
   }
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
@@ -94,14 +113,16 @@ function makeFloorTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-/** Realistic-ish lane-pool water: a blue gradient with painted lane lines
- *  running along the pool's long axis, plus a soft shimmer overlay. */
-function makeLaneWaterTexture(widthUnits: number, depthUnits: number, tone: "rec" | "comp", lanes = 8): THREE.CanvasTexture {
+function makeLaneWaterTexture(
+  widthUnits: number,
+  depthUnits: number,
+  tone: "rec" | "comp",
+  lanes = 8,
+): THREE.CanvasTexture {
   const vertical = depthUnits >= widthUnits;
   const long = Math.max(widthUnits, depthUnits);
-  const short = Math.min(widthUnits, depthUnits);
-  const resLong = 320;
-  const resShort = Math.max(40, Math.round((short / long) * resLong));
+  const resLong = 512;
+  const resShort = Math.max(64, Math.round((Math.min(widthUnits, depthUnits) / long) * resLong));
   const canvasW = vertical ? resShort : resLong;
   const canvasH = vertical ? resLong : resShort;
   const canvas = document.createElement("canvas");
@@ -109,122 +130,72 @@ function makeLaneWaterTexture(widthUnits: number, depthUnits: number, tone: "rec
   canvas.height = canvasH;
   const ctx = canvas.getContext("2d")!;
 
-  const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+  // Smooth architectural blue gradient.
+  const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
   if (tone === "comp") {
-    grad.addColorStop(0, "#3fa6e3");
-    grad.addColorStop(1, "#1c6fb0");
+    grad.addColorStop(0, "#bae6fd");
+    grad.addColorStop(1, "#38bdf8");
   } else {
-    grad.addColorStop(0, "#74d6ec");
-    grad.addColorStop(1, "#2fa6cf");
+    grad.addColorStop(0, "#ccfbf1");
+    grad.addColorStop(1, "#2dd4bf");
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  ctx.globalAlpha = 0.12;
-  ctx.fillStyle = "#ffffff";
-  for (let i = 0; i < 16; i++) {
-    const rx = Math.random() * canvasW;
-    const ry = Math.random() * canvasH;
-    ctx.beginPath();
-    ctx.ellipse(rx, ry, 16, 5, Math.random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  ctx.strokeStyle = "rgba(8, 35, 60, 0.5)";
-  ctx.lineWidth = Math.max(1, resLong * 0.006);
+  // Sleek, minimal technical lane lines.
+  ctx.strokeStyle = "rgba(14, 116, 144, 0.25)";
+  ctx.lineWidth = 3;
   for (let i = 1; i < lanes; i++) {
     const t = i / lanes;
     ctx.beginPath();
     if (vertical) {
-      const x = t * canvasW;
-      ctx.moveTo(x, canvasH * 0.03);
-      ctx.lineTo(x, canvasH * 0.97);
+      ctx.moveTo(t * canvasW, 0);
+      ctx.lineTo(t * canvasW, canvasH);
     } else {
-      const y = t * canvasH;
-      ctx.moveTo(canvasW * 0.03, y);
-      ctx.lineTo(canvasW * 0.97, y);
+      ctx.moveTo(0, t * canvasH);
+      ctx.lineTo(canvasW, t * canvasH);
     }
     ctx.stroke();
   }
 
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  if (vertical) {
-    ctx.fillRect(0, 0, canvasW, canvasH * 0.025);
-    ctx.fillRect(0, canvasH * 0.975, canvasW, canvasH * 0.025);
-  } else {
-    ctx.fillRect(0, 0, canvasW * 0.025, canvasH);
-    ctx.fillRect(canvasW * 0.975, 0, canvasW * 0.025, canvasH);
-  }
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
-/** Soft, lane-less water for the leisure pool / hot tub — gradient plus a
- *  few light "ripple" highlights instead of straight lane markings. */
 function makeSoftWaterTexture(tone: "leisure" | "hot-tub"): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size * 0.4, size * 0.35, size * 0.05, size * 0.5, size * 0.5, size * 0.72);
+  const grad = ctx.createRadialGradient(size * 0.5, size * 0.5, 0, size * 0.5, size * 0.5, size * 0.7);
+
   if (tone === "leisure") {
-    grad.addColorStop(0, "#82e4d4");
-    grad.addColorStop(1, "#159e8a");
+    grad.addColorStop(0, "#e0f2fe");
+    grad.addColorStop(1, "#bae6fd");
   } else {
-    grad.addColorStop(0, "#ffd58a");
-    grad.addColorStop(1, "#dd8a2e");
+    grad.addColorStop(0, "#ffedd5");
+    grad.addColorStop(1, "#fed7aa");
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
-  ctx.globalAlpha = 0.16;
-  ctx.fillStyle = "#ffffff";
-  for (let i = 0; i < 14; i++) {
-    const rx = Math.random() * size;
-    const ry = Math.random() * size;
-    ctx.beginPath();
-    ctx.arc(rx, ry, 6 + Math.random() * 10, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
-/** A rough winding "lazy river" blob, normalized to a -0.5..0.5 box so it
- *  can be scaled to any zone's width/depth like the other shapes. */
 function buildLeisureShape(): THREE.Shape {
   const shape = new THREE.Shape();
-  shape.moveTo(-0.48, -0.32);
-  shape.bezierCurveTo(-0.56, 0.08, -0.32, 0.5, 0.04, 0.46);
-  shape.bezierCurveTo(0.38, 0.43, 0.54, 0.18, 0.4, -0.06);
-  shape.bezierCurveTo(0.5, -0.16, 0.48, -0.36, 0.26, -0.46);
-  shape.bezierCurveTo(-0.02, -0.56, -0.3, -0.54, -0.48, -0.32);
+  shape.moveTo(-0.45, -0.35);
+  shape.bezierCurveTo(-0.52, 0.1, -0.3, 0.45, 0.05, 0.42);
+  shape.bezierCurveTo(0.35, 0.4, 0.5, 0.15, 0.4, -0.1);
+  shape.bezierCurveTo(0.48, -0.22, 0.42, -0.4, 0.22, -0.45);
+  shape.bezierCurveTo(-0.02, -0.5, -0.28, -0.48, -0.45, -0.35);
   return shape;
 }
 
-function addBenchRow(scene: THREE.Scene, centerX: number, centerZ: number, length: number, rotationY: number, count: number) {
-  const benchMat = new THREE.MeshStandardMaterial({ color: 0xcaa472, roughness: 0.6 });
-  for (let i = 0; i < count; i++) {
-    const t = (i + 0.5) / count - 0.5;
-    const bench = new THREE.Mesh(new THREE.BoxGeometry((length / count) * 0.7, 0.12, 0.3), benchMat);
-    bench.position.set(centerX + Math.cos(rotationY) * t * length, 0.06, centerZ + Math.sin(rotationY) * t * length);
-    bench.rotation.y = rotationY;
-    scene.add(bench);
-  }
-}
-
-/** A thick rectangular ring of exterior walls framing the whole building
- *  footprint, so the scene reads as an actual building shell rather than a
- *  bare textured floor. */
 function addWallRing(
   scene: THREE.Scene,
   minX: number,
@@ -235,7 +206,7 @@ function addWallRing(
   height: number,
   color: number,
 ) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
   const w = maxX - minX;
   const d = maxZ - minZ;
   const cx = (minX + maxX) / 2;
@@ -254,99 +225,38 @@ function addWallRing(
   scene.add(west);
 }
 
-/** A small, simple walking avatar (capsule body + sphere head, two stubby
- *  arms) — not tied to any specific chosen character, since this map is
- *  shared across the whole Schedule tab regardless of who's signed up. */
 function buildAvatar(): THREE.Group {
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.5 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf3c89e, roughness: 0.7 });
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.26, 4, 10), bodyMat);
-  body.position.y = 0.32;
-  group.add(body);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), skinMat);
-  head.position.y = 0.62;
-  group.add(head);
-
-  const armGeo = new THREE.CapsuleGeometry(0.045, 0.16, 4, 8);
-  const leftArm = new THREE.Mesh(armGeo, bodyMat);
-  leftArm.position.set(0.2, 0.34, 0);
-  leftArm.rotation.z = 0.35;
-  group.add(leftArm);
-  const rightArm = leftArm.clone();
-  rightArm.position.x = -0.2;
-  rightArm.rotation.z = -0.35;
-  group.add(rightArm);
-
-  // soft contact shadow blob under the feet
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x4f46e5, roughness: 0.4 });
+  const pin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 4), baseMat);
+  pin.position.y = 0.3;
+  pin.rotation.x = Math.PI;
+  group.add(pin);
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.22, 20),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16 }),
+    new THREE.CircleGeometry(0.16, 24),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.08 }),
   );
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.005;
   group.add(shadow);
-
   return group;
 }
 
 const AVATAR_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", " "]);
 
-/** Lane flags, navy starting blocks, and a couple of pool-edge ladders for
- *  a real lap pool (Recreation / Competition), matching the small markers
- *  visible along the lanes in the reference floor-plan rendering. */
-function addLaneAccessories(scene: THREE.Scene, zone: ZoneLayout) {
-  const vertical = zone.depth >= zone.width;
-  const lanes = zone.poolLength === 50 ? 8 : 6;
-  const blockMat = new THREE.MeshStandardMaterial({ color: 0x274472, roughness: 0.4 });
-  const flagMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
-  const ladderMat = new THREE.MeshStandardMaterial({ color: 0xf4f1e9, roughness: 0.25, metalness: 0.35 });
-
-  for (let i = 0; i < lanes; i++) {
-    const t = (i + 0.5) / lanes - 0.5;
-    if (vertical) {
-      const x = zone.x + t * zone.width;
-      const zEdge = zone.z - zone.depth / 2;
-      const block = new THREE.Mesh(new THREE.BoxGeometry((zone.width / lanes) * 0.5, 0.1, 0.16), blockMat);
-      block.position.set(x, 0.07, zEdge - 0.14);
-      scene.add(block);
-      const flag = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 6), flagMat);
-      flag.position.set(x, 0.16, zEdge - 0.32);
-      scene.add(flag);
-    } else {
-      const z = zone.z + t * zone.depth;
-      const xEdge = zone.x - zone.width / 2;
-      const block = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, (zone.depth / lanes) * 0.5), blockMat);
-      block.position.set(xEdge - 0.14, 0.07, z);
-      scene.add(block);
-      const flag = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 6), flagMat);
-      flag.position.set(xEdge - 0.32, 0.16, z);
-      scene.add(flag);
-    }
-  }
-
-  const ladderSpots = vertical
-    ? [-0.28, 0.28].map((f) => new THREE.Vector3(zone.x + zone.width / 2 + 0.08, 0.04, zone.z + f * zone.depth))
-    : [-0.28, 0.28].map((f) => new THREE.Vector3(zone.x + f * zone.width, 0.04, zone.z + zone.depth / 2 + 0.08));
-  for (const pos of ladderSpots) {
-    const ladder = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.24), ladderMat);
-    ladder.position.copy(pos);
-    scene.add(ladder);
-  }
-}
-
 /**
- * A top-down-ish, floor-plan-style three.js scene of the whole aquatic
- * centre — each real named pool (Recreation, Competition North/South,
- * Leisure, Hot Tub) is its own clickable basin with realistic lane-line
- * water, white deck borders, and surrounding context (deck, change rooms,
- * front desk, benches) so it reads like the building, not an abstraction.
- * Hovering raises a basin slightly and pulses a ripple ring; selecting one
- * eases the camera in toward it.
+ * A clean, minimalist top-down map of the aquatic centre: an off-white tiled
+ * deck, each real pool/zone rendered as a sunken basin of water with pill
+ * labels and a session-count badge, plus a soft camera "focus" ease when a
+ * zone is selected. Built directly on three.js (no react-three-fiber).
  */
-export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey = null, onPickZone, onHoverZone }: AquaticCenterSceneProps) {
+export default function AquaticCenterScene({
+  zones,
+  activeZoneKey,
+  focusZoneKey = null,
+  onPickZone,
+  onHoverZone,
+}: AquaticCenterSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const zoneMeshesRef = useRef<THREE.Mesh[]>([]);
   const rippleMeshesRef = useRef<THREE.Mesh[]>([]);
@@ -355,10 +265,7 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
   const waterBaseYsRef = useRef<number[]>([]);
   const avatarGroupRef = useRef<THREE.Group | null>(null);
   const avatarPosRef = useRef(new THREE.Vector3(-1.0, 0, 1.2));
-  const avatarFacingRef = useRef(0);
   const keysRef = useRef<Set<string>>(new Set());
-  const lastMoveAtRef = useRef(0);
-  const lastNearZoneRef = useRef<string | null>(null);
   const stateRef = useRef({ activeZoneKey, onPickZone, onHoverZone, focusZoneKey });
 
   useEffect(() => {
@@ -371,12 +278,9 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
 
     const scene = new THREE.Scene();
     scene.background = null;
-    // Warm cream fog matching the page background (see index.css --grad-bg)
-    // so the far edges of the building fade into the page instead of
-    // stopping at a hard rectangular silhouette.
-    scene.fog = new THREE.Fog(0xfff3c4, 9, 23);
+    scene.fog = new THREE.Fog(0xfbfbfa, 10, 25);
 
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(32, container.clientWidth / container.clientHeight, 0.1, 100);
     camera.position.copy(DEFAULT_CAM_POS);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -387,93 +291,50 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(DEFAULT_TARGET);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    controls.dampingFactor = 0.05;
     controls.enablePan = false;
-    controls.minDistance = 8;
-    controls.maxDistance = 22;
-    controls.minPolarAngle = 0.35;
-    controls.maxPolarAngle = 1.15;
+    controls.minDistance = 7;
+    controls.maxDistance = 20;
+    controls.minPolarAngle = 0.4;
+    controls.maxPolarAngle = 1.1;
     controls.update();
 
-    // ---------- camera focus transition ----------
-    interface CamTransition {
+    let transition: {
       from: THREE.Vector3;
       fromTarget: THREE.Vector3;
       to: THREE.Vector3;
       toTarget: THREE.Vector3;
       start: number;
       duration: number;
-    }
-    let transition: CamTransition | null = null;
+    } | null = null;
     let appliedFocusKey: string | null = null;
-
-    // If the user grabs the view mid-transition, let them take over
-    // immediately instead of fighting their drag.
     controls.addEventListener("start", () => {
       transition = null;
     });
 
-    scene.add(new THREE.AmbientLight(0xfdf7e8, 1.0));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-    sun.position.set(4, 14, 6);
-    scene.add(sun);
+    // Balanced premium lighting.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    mainLight.position.set(6, 18, 8);
+    scene.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.3);
+    fillLight.position.set(-6, 12, -8);
+    scene.add(fillLight);
 
-    // ---------- building floor + context ----------
+    // Floor base.
     const floorTexture = makeFloorTexture();
-    floorTexture.repeat.set(5, 3.2);
+    floorTexture.repeat.set(4, 2.5);
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(14.5, 8.2),
-      new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.85 }),
+      new THREE.PlaneGeometry(15, 9),
+      new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.9 }),
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(-1.0, -0.02, 0.0);
+    floor.position.set(-1.0, -0.01, 0.0);
     scene.add(floor);
 
-    // Thick exterior wall ring framing the whole footprint, plus a sage-green
-    // skylight accent band along the back (north) wall like the real centre.
-    addWallRing(scene, -7.6, 4.7, -4.0, 3.9, 0.18, 0.42, 0xf2f0e7);
-    const wallBand = new THREE.Mesh(
-      new THREE.BoxGeometry(12.5, 0.34, 0.4),
-      new THREE.MeshStandardMaterial({ color: 0xb9c9ad, roughness: 0.8 }),
-    );
-    wallBand.position.set(-1.0, 0.17, -3.8);
-    scene.add(wallBand);
+    // Flat outer borders instead of stark walls.
+    addWallRing(scene, -7.8, 4.8, -4.2, 4.1, 0.12, 0.15, 0xf1f0eb);
 
-    const changeRooms = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 0.5, 6.4),
-      new THREE.MeshStandardMaterial({ color: 0xd8d4c6, roughness: 0.7 }),
-    );
-    changeRooms.position.set(-6.6, 0.25, -0.25);
-    scene.add(changeRooms);
-    const changeLabel = makeLabelSprite("Change Rooms", { bg: "rgba(80,75,60,0.85)", w: 230 });
-    changeLabel.position.set(-6.6, 0.85, -0.25);
-    scene.add(changeLabel);
-
-    const frontDesk = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 0.4, 0.9),
-      new THREE.MeshStandardMaterial({ color: 0xc9c4b2, roughness: 0.7 }),
-    );
-    frontDesk.position.set(-6.2, 0.2, 3.3);
-    scene.add(frontDesk);
-    const deskLabel = makeLabelSprite("Front Desk", { bg: "rgba(80,75,60,0.85)", w: 190 });
-    deskLabel.position.set(-6.2, 0.7, 3.3);
-    scene.add(deskLabel);
-
-    const rec = zones.find((z) => z.key === "recreation");
-    if (rec) addBenchRow(scene, rec.x - rec.width / 2 - 0.35, rec.z, rec.depth, Math.PI / 2, 3);
-    const compZones = zones.filter((z) => z.key.startsWith("comp"));
-    if (compZones.length > 0) {
-      const maxX = Math.max(...compZones.map((z) => z.x + z.width / 2));
-      const minZ = Math.min(...compZones.map((z) => z.z - z.depth / 2));
-      const maxZ = Math.max(...compZones.map((z) => z.z + z.depth / 2));
-      addBenchRow(scene, maxX + 0.35, (minZ + maxZ) / 2, maxZ - minZ, Math.PI / 2, 4);
-    }
-
-    // ---------- zone basins ----------
-    // Each real pool is built as an actual sunken basin — a recessed floor
-    // plus vertical walls down to it, with the water surface floating partway
-    // down — rather than a flat painted rectangle, so it reads as a real
-    // pool you're looking down into instead of a coloured floor decal.
     const zoneMeshes: THREE.Mesh[] = [];
     const rippleMeshes: THREE.Mesh[] = [];
     const rippleScales: { x: number; z: number }[] = [];
@@ -483,80 +344,87 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     for (const zone of zones) {
       const isOtherFlat = zone.key.startsWith("other:");
       const hasBasin = !isOtherFlat;
-      const basinDepth = zone.poolLength === 50 ? 0.78 : zone.poolLength === 25 ? 0.6 : zone.shape === "ellipse" ? 0.34 : 0.4;
-
+      const basinDepth = zone.poolLength === 50 ? 0.45 : zone.poolLength === 25 ? 0.35 : 0.25;
       let geometry: THREE.BufferGeometry;
       let material: THREE.MeshStandardMaterial;
-      let baseOpacity: number;
-      let scaleX: number;
-      let scaleZ: number;
+      let baseOpacity = 0.94;
+      let scaleX = zone.width;
+      let scaleZ = zone.depth;
 
       if (zone.shape === "leisure") {
-        geometry = new THREE.ShapeGeometry(buildLeisureShape(), 24);
-        scaleX = zone.width;
-        scaleZ = zone.depth;
-        baseOpacity = 0.92;
-        material = new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture("leisure"), transparent: true, opacity: baseOpacity, roughness: 0.25 });
+        geometry = new THREE.ShapeGeometry(buildLeisureShape(), 32);
+        baseOpacity = 0.9;
+        material = new THREE.MeshStandardMaterial({
+          map: makeSoftWaterTexture("leisure"),
+          transparent: true,
+          opacity: baseOpacity,
+          roughness: 0.15,
+        });
       } else if (zone.shape === "ellipse") {
-        geometry = new THREE.CircleGeometry(1, 40);
+        geometry = new THREE.CircleGeometry(1, 48);
         scaleX = zone.width / 2;
         scaleZ = zone.depth / 2;
-        baseOpacity = 0.92;
         const tone = zone.key === "hot-tub" ? "hot-tub" : "leisure";
-        material = new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture(tone), transparent: true, opacity: baseOpacity, roughness: 0.25 });
+        material = new THREE.MeshStandardMaterial({
+          map: makeSoftWaterTexture(tone),
+          transparent: true,
+          opacity: baseOpacity,
+          roughness: 0.15,
+        });
       } else if (isOtherFlat) {
         geometry = new THREE.PlaneGeometry(1, 1);
-        scaleX = zone.width;
-        scaleZ = zone.depth;
-        baseOpacity = 0.55;
-        material = new THREE.MeshStandardMaterial({ color: zoneColor(zone), transparent: true, opacity: baseOpacity, roughness: 0.4 });
+        baseOpacity = 0.85;
+        material = new THREE.MeshStandardMaterial({
+          color: zoneColor(zone),
+          transparent: true,
+          opacity: baseOpacity,
+          roughness: 0.5,
+        });
       } else {
         geometry = new THREE.PlaneGeometry(1, 1);
-        scaleX = zone.width;
-        scaleZ = zone.depth;
-        baseOpacity = 0.95;
         material = new THREE.MeshStandardMaterial({
           map: makeLaneWaterTexture(zone.width, zone.depth, zone.poolLength === 50 ? "comp" : "rec"),
           transparent: true,
           opacity: baseOpacity,
-          roughness: 0.2,
-          metalness: 0.05,
+          roughness: 0.12,
         });
       }
 
-      const waterBaseY = hasBasin ? -(basinDepth - 0.1) : 0.04;
-
+      const waterBaseY = hasBasin ? -(basinDepth - 0.05) : 0.02;
       if (hasBasin) {
-        const tileMat = new THREE.MeshStandardMaterial({ color: 0xe3e1d6, roughness: 0.55 });
-        const basinFloor = new THREE.Mesh(geometry.clone(), new THREE.MeshStandardMaterial({ color: 0xbfe6ef, roughness: 0.6 }));
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f5, roughness: 0.6 });
+        const basinFloor = new THREE.Mesh(
+          geometry.clone(),
+          new THREE.MeshStandardMaterial({ color: 0xe0f2fe, roughness: 0.5 }),
+        );
         basinFloor.rotation.x = -Math.PI / 2;
         basinFloor.scale.set(scaleX, 1, scaleZ);
         basinFloor.position.set(zone.x, -basinDepth, zone.z);
         scene.add(basinFloor);
-
         if (zone.shape === "ellipse") {
-          const wall = new THREE.Mesh(
-            new THREE.CylinderGeometry(scaleX, scaleX, basinDepth, 32, 1, true),
-            new THREE.MeshStandardMaterial({ color: 0xe3e1d6, roughness: 0.55, side: THREE.DoubleSide }),
+          const cylinderWall = new THREE.Mesh(
+            new THREE.CylinderGeometry(scaleX, scaleX, basinDepth, 48, 1, true),
+            wallMat,
           );
-          wall.position.set(zone.x, -basinDepth / 2, zone.z);
-          scene.add(wall);
+          cylinderWall.position.set(zone.x, -basinDepth / 2, zone.z);
+          scene.add(cylinderWall);
         } else if (zone.shape !== "leisure") {
           const halfW = zone.width / 2;
           const halfD = zone.depth / 2;
-          const wt = 0.06;
-          const northWall = new THREE.Mesh(new THREE.BoxGeometry(zone.width + wt * 2, basinDepth, wt), tileMat);
-          northWall.position.set(zone.x, -basinDepth / 2, zone.z - halfD);
-          scene.add(northWall);
-          const southWall = northWall.clone();
-          southWall.position.set(zone.x, -basinDepth / 2, zone.z + halfD);
-          scene.add(southWall);
-          const eastWall = new THREE.Mesh(new THREE.BoxGeometry(wt, basinDepth, zone.depth + wt * 2), tileMat);
-          eastWall.position.set(zone.x + halfW, -basinDepth / 2, zone.z);
-          scene.add(eastWall);
-          const westWall = eastWall.clone();
-          westWall.position.set(zone.x - halfW, -basinDepth / 2, zone.z);
-          scene.add(westWall);
+          const wt = 0.04;
+
+          const nWall = new THREE.Mesh(new THREE.BoxGeometry(zone.width + wt * 2, basinDepth, wt), wallMat);
+          nWall.position.set(zone.x, -basinDepth / 2, zone.z - halfD);
+          scene.add(nWall);
+          const sWall = nWall.clone();
+          sWall.position.set(zone.x, -basinDepth / 2, zone.z + halfD);
+          scene.add(sWall);
+          const eWall = new THREE.Mesh(new THREE.BoxGeometry(wt, basinDepth, zone.depth + wt * 2), wallMat);
+          eWall.position.set(zone.x + halfW, -basinDepth / 2, zone.z);
+          scene.add(eWall);
+          const wWall = eWall.clone();
+          wWall.position.set(zone.x - halfW, -basinDepth / 2, zone.z);
+          scene.add(wWall);
         }
       }
 
@@ -570,57 +438,53 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
       baseOpacities.push(baseOpacity);
       waterBaseYs.push(waterBaseY);
 
-      // white coping/deck rim right at deck level, around the basin's rim
-      const outline = new THREE.Mesh(geometry.clone(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
-      outline.rotation.x = -Math.PI / 2;
-      outline.scale.set(scaleX * 1.08, 1, scaleZ * 1.08);
-      outline.position.set(zone.x, 0.015, zone.z);
-      scene.add(outline);
+      // Soft architectural white edge line.
+      const borderOutline = new THREE.Mesh(
+        geometry.clone(),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }),
+      );
+      borderOutline.rotation.x = -Math.PI / 2;
+      borderOutline.scale.set(scaleX * 1.04, 1, scaleZ * 1.04);
+      borderOutline.position.set(zone.x, 0.005, zone.z);
+      scene.add(borderOutline);
 
-      // hidden-by-default hover ripple ring, pulsed in tick()
+      // Clean interactive ring.
       const ripple = new THREE.Mesh(
-        new THREE.RingGeometry(0.9, 1, 40),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false }),
+        new THREE.RingGeometry(0.96, 1.0, 48),
+        new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4, depthWrite: false }),
       );
       ripple.rotation.x = -Math.PI / 2;
       ripple.scale.set(scaleX, 1, scaleZ);
-      ripple.position.set(zone.x, 0.03, zone.z);
+      ripple.position.set(zone.x, 0.01, zone.z);
       ripple.visible = false;
       scene.add(ripple);
       rippleMeshes.push(ripple);
       rippleScales.push({ x: scaleX, z: scaleZ });
 
-      // lane flags, starting blocks, and ladders for the two real lap pools
-      if (!isOtherFlat && zone.shape === "rect" && zone.poolLength !== null) {
-        addLaneAccessories(scene, zone);
-      }
-
-      // zone name plate
-      const label = makeLabelSprite(zone.label, { bg: "rgba(44,35,80,0.85)", w: Math.max(180, zone.label.length * 16) });
-      label.position.set(zone.x, hasBasin ? 0.5 : 0.45, zone.z - zone.depth / 2 + 0.05);
+      // Pill label + optional session-count badge.
+      const label = makeLabelSprite(zone.label);
+      label.position.set(zone.x, 0.45, zone.z - zone.depth / 2 - 0.2);
       scene.add(label);
 
-      // session-count badge (hidden if zero)
       if (zone.count > 0) {
         const badge = makeLabelSprite(String(zone.count), {
-          bg: zone.poolLength === 50 ? "rgba(168,85,247,0.92)" : zone.poolLength === 25 ? "rgba(56,189,248,0.92)" : "rgba(20,184,166,0.92)",
-          w: 90,
-          h: 90,
+          bg: "#4f46e5",
+          fg: "#ffffff",
+          w: 80,
+          h: 80,
+          isBadge: true,
         });
-        badge.position.set(zone.x + zone.width / 2 - 0.3, hasBasin ? 0.6 : 0.55, zone.z + zone.depth / 2 - 0.3);
+        badge.position.set(zone.x + zone.width / 2 - 0.1, 0.5, zone.z + zone.depth / 2 - 0.1);
         scene.add(badge);
       }
     }
+
     zoneMeshesRef.current = zoneMeshes;
     rippleMeshesRef.current = rippleMeshes;
     rippleScalesRef.current = rippleScales;
     baseOpacitiesRef.current = baseOpacities;
     waterBaseYsRef.current = waterBaseYs;
 
-    // ---------- walkable avatar ----------
-    // A small game-style explorer the visitor can drive around the floor
-    // plan with WASD/arrow keys, like driving through zones in a 3D
-    // portfolio — walking up to a pool basin hovers it, Enter/Space opens it.
     const avatar = buildAvatar();
     avatar.position.copy(avatarPosRef.current);
     scene.add(avatar);
@@ -629,11 +493,7 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (!AVATAR_KEYS.has(key)) return;
-      const target = document.activeElement;
-      if (target && /input|textarea|select/i.test(target.tagName)) return;
-      if (key === "arrowup" || key === "arrowdown" || key === "arrowleft" || key === "arrowright" || key === " ") {
-        e.preventDefault();
-      }
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) e.preventDefault();
       keysRef.current.add(key);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -642,7 +502,6 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
-    // ---------- resize ----------
     const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -651,11 +510,9 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
+    window.addEventListener("resize", resize);
     resize();
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(container);
 
-    // ---------- picking ----------
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const pickZoneAt = (clientX: number, clientY: number): string | null => {
@@ -664,168 +521,74 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects(zoneMeshesRef.current, false);
-      if (hits.length === 0) return null;
-      return hits[0].object.userData.zoneKey as string;
+      return hits.length > 0 ? (hits[0].object.userData.zoneKey as string) : null;
     };
 
     let downPos: { x: number; y: number } | null = null;
-    const handleDown = (e: PointerEvent) => {
+    const handlePointerDown = (e: PointerEvent) => {
       downPos = { x: e.clientX, y: e.clientY };
     };
-    const handleUp = (e: PointerEvent) => {
+    const handlePointerUp = (e: PointerEvent) => {
       if (!downPos) return;
-      const dx = e.clientX - downPos.x;
-      const dy = e.clientY - downPos.y;
-      downPos = null;
-      if (Math.hypot(dx, dy) > 6) return;
+      if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 5) return;
       const key = pickZoneAt(e.clientX, e.clientY);
       if (key && stateRef.current.onPickZone) stateRef.current.onPickZone(key);
     };
-    const handleMove = (e: PointerEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const key = pickZoneAt(e.clientX, e.clientY);
       renderer.domElement.style.cursor = key ? "pointer" : "grab";
       if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(key);
     };
-    const handleLeave = () => {
-      renderer.domElement.style.cursor = "grab";
-      if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(null);
-    };
-    renderer.domElement.addEventListener("pointerdown", handleDown);
-    renderer.domElement.addEventListener("pointerup", handleUp);
-    renderer.domElement.addEventListener("pointermove", handleMove);
-    renderer.domElement.addEventListener("pointerleave", handleLeave);
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    renderer.domElement.addEventListener("pointerup", handlePointerUp);
+    renderer.domElement.addEventListener("pointermove", handlePointerMove);
 
-    // ---------- render loop ----------
-    let raf = 0;
-    const avatarClock = new THREE.Clock();
-    const FLOOR_MIN_X = -7.3;
-    const FLOOR_MAX_X = 4.4;
-    const FLOOR_MIN_Z = -3.7;
-    const FLOOR_MAX_Z = 3.6;
-    const WALK_SPEED = 2.6;
-    let prevEnterHeld = false;
-
-    const isNearZone = (px: number, pz: number, zone: ZoneLayout): boolean => {
-      const pad = 0.5;
-      if (zone.shape === "ellipse") {
-        const rx = zone.width / 2 + pad;
-        const rz = zone.depth / 2 + pad;
-        const dx = (px - zone.x) / rx;
-        const dz = (pz - zone.z) / rz;
-        return dx * dx + dz * dz <= 1;
-      }
-      return (
-        px >= zone.x - zone.width / 2 - pad &&
-        px <= zone.x + zone.width / 2 + pad &&
-        pz >= zone.z - zone.depth / 2 - pad &&
-        pz <= zone.z + zone.depth / 2 + pad
-      );
-    };
-
+    let rafId = 0;
     const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const dt = Math.min(0.05, avatarClock.getDelta());
+      rafId = requestAnimationFrame(tick);
       const { activeZoneKey: curActive, focusZoneKey: curFocus } = stateRef.current;
 
-      // ---- avatar movement (WASD / arrow keys) ----
-      const keys = keysRef.current;
-      let dx = 0;
-      let dz = 0;
-      if (keys.has("w") || keys.has("arrowup")) dz -= 1;
-      if (keys.has("s") || keys.has("arrowdown")) dz += 1;
-      if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
-      if (keys.has("d") || keys.has("arrowright")) dx += 1;
-      const moving = dx !== 0 || dz !== 0;
-      if (moving) {
-        const len = Math.hypot(dx, dz) || 1;
-        const pos = avatarPosRef.current;
-        pos.x = THREE.MathUtils.clamp(pos.x + (dx / len) * WALK_SPEED * dt, FLOOR_MIN_X, FLOOR_MAX_X);
-        pos.z = THREE.MathUtils.clamp(pos.z + (dz / len) * WALK_SPEED * dt, FLOOR_MIN_Z, FLOOR_MAX_Z);
-        avatarFacingRef.current = Math.atan2(dx, dz);
-        lastMoveAtRef.current = performance.now();
-      }
-      const avatarMesh = avatarGroupRef.current;
-      if (avatarMesh) {
-        const bob = moving ? Math.abs(Math.sin(performance.now() / 160)) * 0.05 : 0;
-        avatarMesh.position.set(avatarPosRef.current.x, bob, avatarPosRef.current.z);
-        avatarMesh.rotation.y = THREE.MathUtils.lerp(avatarMesh.rotation.y, avatarFacingRef.current, 0.25);
-      }
+      // Animate active/hover states smoothly.
+      zoneMeshes.forEach((mesh, idx) => {
+        const isHovered = mesh.userData.zoneKey === curActive;
+        const targetY = isHovered ? waterBaseYs[idx] + 0.04 : waterBaseYs[idx];
+        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, targetY, 0.15);
 
-      // ---- proximity to zones: hover + Enter/Space to open ----
-      const nearZone = zones.find((z) => isNearZone(avatarPosRef.current.x, avatarPosRef.current.z, z)) ?? null;
-      const nearKey = nearZone?.key ?? null;
-      if (nearKey !== lastNearZoneRef.current) {
-        lastNearZoneRef.current = nearKey;
-        if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(nearKey);
-      }
-      const enterHeld = keys.has("enter") || keys.has(" ");
-      if (enterHeld && !prevEnterHeld && nearKey && stateRef.current.onPickZone) {
-        stateRef.current.onPickZone(nearKey);
-      }
-      prevEnterHeld = enterHeld;
+        const ripple = rippleMeshes[idx];
+        if (ripple) {
+          ripple.visible = isHovered;
+          if (isHovered) {
+            const cycle = (performance.now() % 1200) / 1200;
+            ripple.scale.set(rippleScales[idx].x * (1 + cycle * 0.08), 1, rippleScales[idx].z * (1 + cycle * 0.08));
+            (ripple.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - cycle);
+          }
+        }
+      });
 
-      // soft camera follow while actively walking, so the view keeps up
-      // with the avatar without fighting a manual orbit/zoom
-      if (!transition && performance.now() - lastMoveAtRef.current < 250) {
-        controls.target.x = THREE.MathUtils.lerp(controls.target.x, avatarPosRef.current.x, 0.06);
-        controls.target.z = THREE.MathUtils.lerp(controls.target.z, avatarPosRef.current.z, 0.06);
-      }
-
+      // Camera easing focus.
       if (curFocus !== appliedFocusKey) {
         appliedFocusKey = curFocus;
-        const zone = curFocus ? zones.find((z) => z.key === curFocus) : null;
-        const toPos = zone
-          ? new THREE.Vector3(zone.x + zone.width * 0.1, 7, zone.z + zone.depth * 0.55 + 3)
+        const targetZone = zones.find((z) => z.key === curFocus);
+        const targetPos = targetZone
+          ? new THREE.Vector3(targetZone.x, 6.5, targetZone.z + 4.5)
           : DEFAULT_CAM_POS.clone();
-        const toTarget = zone ? new THREE.Vector3(zone.x, 0, zone.z) : DEFAULT_TARGET.clone();
+        const targetLook = targetZone ? new THREE.Vector3(targetZone.x, 0, targetZone.z) : DEFAULT_TARGET.clone();
+
         transition = {
           from: camera.position.clone(),
           fromTarget: controls.target.clone(),
-          to: toPos,
-          toTarget,
+          to: targetPos,
+          toTarget: targetLook,
           start: performance.now(),
-          duration: 650,
+          duration: 500,
         };
       }
-
       if (transition) {
-        const t = Math.min(1, (performance.now() - transition.start) / transition.duration);
-        const eased = 1 - Math.pow(1 - t, 3);
-        camera.position.lerpVectors(transition.from, transition.to, eased);
-        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, eased);
-        if (t >= 1) transition = null;
-      }
-
-      const now = performance.now();
-      for (let i = 0; i < zoneMeshesRef.current.length; i++) {
-        const mesh = zoneMeshesRef.current[i];
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        const isActive = mesh.userData.zoneKey === curActive;
-        const base = baseOpacitiesRef.current[i] ?? 0.85;
-        mat.opacity = isActive ? Math.min(1, base + 0.1) : base;
-
-        // Running-water feel: slowly drift the water texture (a gentle
-        // current) and bob the surface up and down a touch, each pool out
-        // of phase with the others so it doesn't look mechanically uniform.
-        const phase = i * 1.7;
-        if (mat.map) {
-          mat.map.offset.set(Math.sin(now / 3400 + phase) * 0.025, (now / 9000 + phase * 0.1) % 1);
-        }
-        const restY = waterBaseYsRef.current[i] ?? 0.04;
-        const bob = Math.sin(now / 900 + phase) * 0.012;
-        const targetY = (isActive ? restY + 0.06 : restY) + bob;
-        mesh.position.y = THREE.MathUtils.lerp(mesh.position.y, targetY, 0.15);
-
-        const ripple = rippleMeshesRef.current[i];
-        const rippleScale = rippleScalesRef.current[i];
-        if (ripple && rippleScale) {
-          ripple.visible = isActive;
-          if (isActive) {
-            const pulse = 1 + 0.16 * Math.sin(performance.now() / 220);
-            ripple.scale.set(rippleScale.x * pulse, 1, rippleScale.z * pulse);
-            (ripple.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.16 * Math.sin(performance.now() / 220);
-          }
-        }
+        const progress = Math.min(1, (performance.now() - transition.start) / transition.duration);
+        const ease = progress * (2 - progress); // subtle quadratic ease-out
+        camera.position.lerpVectors(transition.from, transition.to, ease);
+        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, ease);
+        if (progress === 1) transition = null;
       }
 
       controls.update();
@@ -834,28 +597,26 @@ export default function AquaticCenterScene({ zones, activeZoneKey, focusZoneKey 
     tick();
 
     return () => {
-      cancelAnimationFrame(raf);
-      resizeObserver.disconnect();
+      cancelAnimationFrame(rafId);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
-      renderer.domElement.removeEventListener("pointerdown", handleDown);
-      renderer.domElement.removeEventListener("pointerup", handleUp);
-      renderer.domElement.removeEventListener("pointermove", handleMove);
-      renderer.domElement.removeEventListener("pointerleave", handleLeave);
+      window.removeEventListener("resize", resize);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
+      renderer.domElement.removeEventListener("pointermove", handlePointerMove);
       controls.dispose();
-      renderer.dispose();
       scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
+        if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose();
           const material = obj.material;
           if (Array.isArray(material)) material.forEach((m) => m.dispose());
           else material.dispose();
         }
       });
-      container.removeChild(renderer.domElement);
+      renderer.dispose();
+      container.innerHTML = "";
     };
-    // Geometry is rebuilt whenever the set of zones (their shapes/labels/counts) changes.
   }, [zones]);
 
-  return <div ref={containerRef} className="aquatic-scene-canvas" />;
+  return <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }} />;
 }
