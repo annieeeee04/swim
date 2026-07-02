@@ -67,10 +67,11 @@ export default function AquaticCenterSchedule({
           ]
         : [{ key: "comp", label: "Competition Pool", poolLength: 50 as const, shape: "rect" as const, x: 1.6, z: 0, width: 4.4, depth: 6.6 }]),
       { key: "leisure", label: "Leisure Pool", poolLength: null, shape: "leisure", x: -4.0, z: 1.7, width: 2.8, depth: 2.4 },
+      // The hot tub is a permanent fixture on the real floor plan (nested
+      // between the leisure pool and the competition pool), so it's always
+      // drawn — its session badge simply stays empty on quiet days.
+      { key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.7, z: 0.4, width: 0.9, depth: 0.9 },
     ];
-    if (zoneInfo["hot-tub"]) {
-      base.push({ key: "hot-tub", label: "Hot Tub", poolLength: null, shape: "ellipse", x: -1.7, z: 0.4, width: 0.9, depth: 0.9 });
-    }
     let otherIndex = 0;
     for (const [key, info] of Object.entries(zoneInfo)) {
       if (!key.startsWith("other:")) continue;

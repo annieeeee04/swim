@@ -22,7 +22,7 @@ interface AquaticCenterSceneProps {
   onHoverZone?: (key: string | null) => void;
 }
 
-const DEFAULT_CAM_POS = new THREE.Vector3(-0.5, 13.5, 13.5);
+const DEFAULT_CAM_POS = new THREE.Vector3(-0.5, 15.5, 15.5);
 const DEFAULT_TARGET = new THREE.Vector3(-0.5, 0, 0.2);
 
 // ---------------------------------------------------------------------------
@@ -122,19 +122,21 @@ function makeWaterTexture(widthUnits: number, depthUnits: number, tone: "rec" | 
   canvas.width = canvasW;
   canvas.height = canvasH;
   const ctx = canvas.getContext("2d")!;
+  // Soft aqua tones matched to the facility-plan illustration: pale blue
+  // water with dark navy painted lane lines + T-marks.
   const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
   if (tone === "comp") {
-    grad.addColorStop(0, "#2989d8");
-    grad.addColorStop(0.5, "#1e73be");
-    grad.addColorStop(1, "#105291");
+    grad.addColorStop(0, "#79c0e2");
+    grad.addColorStop(0.5, "#57a6d0");
+    grad.addColorStop(1, "#3d8bba");
   } else {
-    grad.addColorStop(0, "#54c2e6");
-    grad.addColorStop(0.5, "#34a5d4");
-    grad.addColorStop(1, "#2082b3");
+    grad.addColorStop(0, "#8ed2e8");
+    grad.addColorStop(0.5, "#66b8da");
+    grad.addColorStop(1, "#4a9dc8");
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvasW, canvasH);
-  ctx.strokeStyle = "rgba(8,50,85,0.45)";
+  ctx.strokeStyle = "rgba(13,44,74,0.62)";
   ctx.lineWidth = 5;
   const longLen = vertical ? canvasH : canvasW;
   for (let i = 1; i < lanes; i++) {
@@ -397,6 +399,99 @@ function buildBench(): THREE.Group {
   return g;
 }
 
+/** A low-walled room footprint (change rooms, front desk, classroom, sauna…)
+ *  — white walls + warm floor, read from above like the facility plan. */
+function buildRoom(width: number, depth: number): THREE.Group {
+  const room = new THREE.Group();
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(width, 0.06, depth),
+    new THREE.MeshStandardMaterial({ color: 0xf7f5f0, roughness: 0.85 }),
+  );
+  floor.position.y = 0.03;
+  room.add(floor);
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+  const t = 0.07;
+  const h = 0.5;
+  const addWall = (w: number, d: number, x: number, z: number) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    wall.position.set(x, 0.06 + h / 2, z);
+    room.add(wall);
+  };
+  addWall(width, t, 0, -depth / 2 + t / 2);
+  addWall(width, t, 0, depth / 2 - t / 2);
+  addWall(t, depth - t * 2, -width / 2 + t / 2, 0);
+  addWall(t, depth - t * 2, width / 2 - t / 2, 0);
+  return room;
+}
+
+/** Raised mezzanine strip along the east wall, with a row of benches. */
+function buildMezzanine(depth: number): THREE.Group {
+  const mezz = new THREE.Group();
+  const platform = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 0.5, depth),
+    new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: 0.8 }),
+  );
+  platform.position.y = 0.25;
+  mezz.add(platform);
+  const benchCount = Math.floor(depth / 2.0);
+  for (let i = 0; i < benchCount; i++) {
+    const bench = buildBench();
+    bench.rotation.y = Math.PI / 2;
+    bench.position.set(0, 0.5, -depth / 2 + 1.1 + i * 2.0);
+    mezz.add(bench);
+  }
+  // guard rail on the pool-facing edge
+  const rail = new THREE.Mesh(
+    new THREE.BoxGeometry(0.04, 0.28, depth),
+    new THREE.MeshStandardMaterial({ color: 0xb9c2cc, metalness: 0.6, roughness: 0.35 }),
+  );
+  rail.position.set(-0.5, 0.72, 0);
+  mezz.add(rail);
+  return mezz;
+}
+
+/** Glass skylight canopy strip (the glazed grid at the top of the plan). */
+function buildSkylightCanopy(width: number, depth: number): THREE.Group {
+  const canopy = new THREE.Group();
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({
+      color: 0xcfe9f7,
+      transparent: true,
+      opacity: 0.32,
+      roughness: 0.1,
+      side: THREE.DoubleSide,
+    }),
+  );
+  glass.rotation.x = -Math.PI / 2;
+  glass.position.y = 2.3;
+  canopy.add(glass);
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.5, metalness: 0.3 });
+  const bars = Math.floor(width / 0.45);
+  for (let i = 0; i <= bars; i++) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, depth), frameMat);
+    bar.position.set(-width / 2 + (width * i) / bars, 2.31, 0);
+    canopy.add(bar);
+  }
+  for (const edge of [-depth / 2, depth / 2]) {
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(width, 0.05, 0.05), frameMat);
+    rim.position.set(0, 2.31, edge);
+    canopy.add(rim);
+  }
+  // slim support posts at the corners
+  for (const [px, pz] of [
+    [-width / 2 + 0.1, -depth / 2 + 0.1],
+    [width / 2 - 0.1, -depth / 2 + 0.1],
+    [-width / 2 + 0.1, depth / 2 - 0.1],
+    [width / 2 - 0.1, depth / 2 - 0.1],
+  ] as [number, number][]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.3, 8), frameMat);
+    post.position.set(px, 1.15, pz);
+    canopy.add(post);
+  }
+  return canopy;
+}
+
 function buildLifeguardChair(): THREE.Group {
   const g = new THREE.Group();
   const frame = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
@@ -440,7 +535,7 @@ export default function AquaticCenterScene({
 
     const scene = new THREE.Scene();
     scene.background = null;
-    scene.fog = new THREE.Fog(0xf1f5f9, 18, 35);
+    scene.fog = new THREE.Fog(0xf1f5f9, 24, 46);
 
     const camera = new THREE.PerspectiveCamera(28, container.clientWidth / container.clientHeight, 0.1, 100);
     camera.position.copy(DEFAULT_CAM_POS);
@@ -456,7 +551,7 @@ export default function AquaticCenterScene({
     controls.dampingFactor = 0.05;
     controls.enablePan = false;
     controls.minDistance = 6;
-    controls.maxDistance = 24;
+    controls.maxDistance = 28;
     controls.minPolarAngle = 0.3;
     controls.maxPolarAngle = 1.2;
     controls.update();
@@ -518,6 +613,63 @@ export default function AquaticCenterScene({
     const sideWallLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.4, dD + 0.8), wallMat);
     sideWallLeft.position.set(dMinX - 0.3, 1.2, dCz);
     scene.add(sideWallLeft);
+    const sideWallRight = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.4, dD + 0.8), wallMat);
+    sideWallRight.position.set(dMaxX + 0.3, 1.2, dCz);
+    scene.add(sideWallRight);
+
+    // ---- Facility rooms (matching the real UBC Aquatic Centre floor plan) ----
+    // West strip: change rooms + front desk. East strip: classroom, steam &
+    // sauna, and a raised mezzanine gallery along the far wall.
+    const roomLabelY = deckY + 0.85;
+    const rooms: { label: string; x: number; z: number; w: number; d: number }[] = [
+      { label: "Men's Change Room", x: -7.15, z: -2.9, w: 1.6, d: 2.9 },
+      { label: "Universal Change Room", x: -7.15, z: 0.4, w: 1.6, d: 3.3 },
+      { label: "Front Desk", x: -7.15, z: 3.4, w: 1.6, d: 1.6 },
+      { label: "Classroom", x: 5.0, z: -3.4, w: 1.3, d: 1.7 },
+      { label: "Steam & Sauna", x: 5.0, z: -1.3, w: 1.3, d: 2.2 },
+    ];
+    for (const r of rooms) {
+      const room = buildRoom(r.w, r.d);
+      room.position.set(r.x, deckY, r.z);
+      scene.add(room);
+      const roomLabel = makeLabelSprite(r.label, { w: 380, h: 78 });
+      roomLabel.scale.multiplyScalar(0.72);
+      roomLabel.position.set(r.x, roomLabelY, r.z);
+      scene.add(roomLabel);
+    }
+    // benches inside the change rooms (locker-room rows from the plan)
+    for (const [bx, bz] of [
+      [-7.15, -3.5], [-7.15, -2.3], [-7.15, -0.4], [-7.15, 0.9],
+    ] as [number, number][]) {
+      const roomBench = buildBench();
+      roomBench.position.set(bx, deckY + 0.06, bz);
+      scene.add(roomBench);
+    }
+    // reception counter inside the front desk room
+    const deskCounter = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.26, 0.24),
+      new THREE.MeshStandardMaterial({ color: 0xc9a06a, roughness: 0.6 }),
+    );
+    deskCounter.position.set(-7.15, deckY + 0.19, 3.15);
+    scene.add(deskCounter);
+    const entranceLabel = makeLabelSprite("Front Entrance ⟶", { w: 340, h: 72 });
+    entranceLabel.scale.multiplyScalar(0.6);
+    entranceLabel.position.set(-7.15, deckY + 0.35, 4.35);
+    scene.add(entranceLabel);
+
+    // mezzanine gallery along the east wall
+    const mezzanine = buildMezzanine(dD - 0.6);
+    mezzanine.position.set(6.6, deckY, dCz);
+    scene.add(mezzanine);
+    const mezzLabel = makeLabelSprite("Mezzanine", { w: 300, h: 78 });
+    mezzLabel.scale.multiplyScalar(0.72);
+    mezzLabel.position.set(6.6, deckY + 1.25, dCz);
+    scene.add(mezzLabel);
+
+    // glazed skylight strip above the competition pool's north end
+    const skylight = buildSkylightCanopy(4.0, 1.1);
+    skylight.position.set(1.6, deckY, dMinZ + 0.75);
+    scene.add(skylight);
 
     // ---- Zone iteration ----
     const zoneMeshes: THREE.Mesh[] = [];
@@ -527,14 +679,24 @@ export default function AquaticCenterScene({
       const isOther = zone.key.startsWith("other:");
       const isHotTub = zone.key === "hot-tub" || zone.label.toLowerCase().includes("tub");
       const bDepth = zone.poolLength === 50 ? 0.7 : zone.poolLength === 25 ? 0.55 : 0.35;
-      const wBaseY = !isOther ? deckY - bDepth + 0.06 : deckY + 0.01;
+      // Water sits just ABOVE the deck slab (the deck is a solid box, so a
+      // recessed surface would be hidden inside it — this also matches the
+      // top-down facility-plan look, where water reads at floor level).
+      // Shaped pools ride slightly higher so they clear their extruded rims.
+      const isShaped = zone.shape === "leisure" || isHotTub;
+      const wBaseY = isOther ? deckY + 0.01 : isShaped ? deckY + 0.045 : deckY + 0.02;
       let geo: THREE.BufferGeometry;
       let mat: THREE.MeshStandardMaterial;
       let sX = zone.width;
       let sZ = zone.depth;
       const along: "x" | "z" = zone.depth >= zone.width ? "z" : "x";
       const shortSide = Math.min(zone.width, zone.depth);
-      const laneCount = THREE.MathUtils.clamp(Math.round(shortSide / 0.58), 4, 10);
+      // Lane counts from the real facility plan: 8 in the 50m Competition
+      // pool, 6 in the 25m Recreation pool.
+      const laneCount =
+        zone.poolLength === 50 ? 8 :
+        zone.poolLength === 25 ? 6 :
+        THREE.MathUtils.clamp(Math.round(shortSide / 0.58), 4, 10);
 
       if (zone.shape === "leisure") {
         geo = new THREE.ShapeGeometry(buildLeisureShape(), 36);
@@ -559,18 +721,9 @@ export default function AquaticCenterScene({
         });
       }
 
-      // Basin floor + coping
+      // White coping around each pool edge (the basin itself would be hidden
+      // inside the solid deck box, so only the rim is modeled).
       if (!isOther) {
-        const basinFloorMat = new THREE.MeshStandardMaterial({
-          color: zone.poolLength === 50 ? 0xa8daf5 : zone.shape === "leisure" ? 0xbfeefc : 0xbce5f7,
-          roughness: 0.5,
-        });
-        const basinFloor = new THREE.Mesh(geo.clone(), basinFloorMat);
-        basinFloor.rotation.x = -Math.PI / 2;
-        basinFloor.scale.set(sX, 1, sZ);
-        basinFloor.position.set(zone.x, deckY - bDepth, zone.z);
-        scene.add(basinFloor);
-
         const copeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
         if (zone.shape === "rect") {
           const ct = 0.12;
@@ -588,25 +741,27 @@ export default function AquaticCenterScene({
           const cw = ce.clone();
           cw.position.set(zone.x - hW, deckY + 0.01, zone.z);
           scene.add(cw);
-        } else if (zone.shape === "leisure") {
-          const rimExtrude = new THREE.ExtrudeGeometry(buildLeisureShape(), { depth: 0.04, bevelEnabled: false });
-          const leisureRim = new THREE.Mesh(rimExtrude, copeMat);
-          leisureRim.rotation.x = -Math.PI / 2;
-          leisureRim.position.set(zone.x, deckY + 0.01, zone.z);
-          scene.add(leisureRim);
         } else {
-          const rimExtrude = new THREE.ExtrudeGeometry(buildHotTubShape(), { depth: 0.04, bevelEnabled: false });
-          const htRim = new THREE.Mesh(rimExtrude, copeMat);
-          htRim.rotation.x = -Math.PI / 2;
-          htRim.position.set(zone.x, deckY + 0.01, zone.z);
-          scene.add(htRim);
+          // Shaped pools: the rim is the SAME footprint scaled up ~7% and
+          // kept below the water surface, so only a white border peeks out
+          // around the water instead of a solid slab covering it.
+          const rimShape = zone.shape === "leisure" ? buildLeisureShape() : buildHotTubShape();
+          const rimExtrude = new THREE.ExtrudeGeometry(rimShape, { depth: 0.03, bevelEnabled: false });
+          const rim = new THREE.Mesh(rimExtrude, copeMat);
+          rim.rotation.x = -Math.PI / 2;
+          rim.scale.set(1.07, 1.07, 1);
+          rim.position.set(zone.x, deckY + 0.005, zone.z);
+          scene.add(rim);
         }
       }
 
-      // Water surface
+      // Water surface. NB: scale acts on LOCAL axes before the X-rotation is
+      // applied, and a PlaneGeometry lies in its local XY plane — so the
+      // zone's depth must scale local Y (scaling local Z would leave the
+      // water a thin band across the middle of the pool).
       const waterMesh = new THREE.Mesh(geo, mat);
       waterMesh.rotation.x = -Math.PI / 2;
-      waterMesh.scale.set(sX, 1, sZ);
+      waterMesh.scale.set(sX, sZ, 1);
       waterMesh.position.set(zone.x, wBaseY, zone.z);
       waterMesh.userData.zoneKey = zone.key;
       scene.add(waterMesh);
@@ -619,7 +774,9 @@ export default function AquaticCenterScene({
         const halfD = zone.depth / 2;
         const laneSpan = along === "z" ? zone.width : zone.depth;
         const laneLen = along === "z" ? zone.depth : zone.width;
-        const ropeTex = makeRopeTexture(zone.poolLength === 50 ? "#e11d48" : "#2563eb");
+        // Navy-blue segmented ropes for both pools, matching the plan's
+        // dark lane markings (the old red ropes read as an alarm color).
+        const ropeTex = makeRopeTexture(zone.poolLength === 50 ? "#1d4ed8" : "#2563eb");
 
         for (let i = 1; i < laneCount; i++) {
           const off = -laneSpan / 2 + (laneSpan * i) / laneCount;
@@ -669,12 +826,20 @@ export default function AquaticCenterScene({
           }
         }
 
-        // Diving tower belongs to the DEEP 25m Recreation pool (4.5m), NOT the
-        // shallow 50m Competition pool (2.3m).
-        if (zone.poolLength === 25) {
+        // Facility-plan placement: the diving platform sits at the north end
+        // of the 50m Competition pool, and the Recreation pool gets the
+        // poolside basketball hoop on its south edge.
+        if (zone.poolLength === 50 && zone.key !== "comp-south") {
           const dTower = buildDivingTower();
-          dTower.position.set(zone.x, deckY, zone.z - halfD + 0.15);
+          dTower.scale.setScalar(0.55);
+          dTower.position.set(zone.x, deckY, zone.z - halfD - 0.55);
           scene.add(dTower);
+        }
+        if (zone.poolLength === 25) {
+          const recHoop = buildBasketballHoop();
+          recHoop.position.set(zone.x - zone.width / 2 + 0.45, deckY, zone.z + halfD + 0.12);
+          recHoop.rotation.y = Math.PI; // face north, into the pool
+          scene.add(recHoop);
         }
       }
 
@@ -737,41 +902,9 @@ export default function AquaticCenterScene({
           scene.add(ball);
         }
 
-        // ---- split the pool: white divider + warm hot-pool on the right ----
-        const dividerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
-        const divider = new THREE.Mesh(new THREE.BoxGeometry(0.1, bDepth + 0.18, 1.9), dividerMat);
-        divider.position.set(zone.x + 0.32, deckY - bDepth / 2 + 0.06, zone.z);
-        scene.add(divider);
-
-        const warm = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.72, 1.7),
-          new THREE.MeshStandardMaterial({ map: makeSoftWaterTexture("hot-tub"), transparent: true, opacity: 0.92, roughness: 0.05 }),
-        );
-        warm.rotation.x = -Math.PI / 2;
-        warm.position.set(zone.x + 0.55, wBaseY + 0.008, zone.z);
-        scene.add(warm);
-
-        const warmJetMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
-        for (const [jx, jz] of [
-          [0.5, 0.4],
-          [0.62, -0.1],
-          [0.5, -0.55],
-        ] as [number, number][]) {
-          const jet = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), warmJetMat);
-          jet.position.set(zone.x + jx, wBaseY + 0.03, zone.z + jz);
-          scene.add(jet);
-        }
-
-        // Warm-corner ledge seats.
-        const ledgeMat = new THREE.MeshStandardMaterial({ color: 0xfde3c4, roughness: 0.55 });
-        for (const [lx, lz] of [
-          [0.6, 0.55],
-          [0.6, -0.5],
-        ] as [number, number][]) {
-          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.09, 0.16), ledgeMat);
-          ledge.position.set(zone.x + lx, deckY - bDepth + 0.14, zone.z + lz);
-          scene.add(ledge);
-        }
+        // (The whole leisure pool reads as one light-aqua surface, matching
+        // the facility plan — the warm-water story belongs to the hot tub
+        // right next door.)
       }
 
       // ---- Hot tub: stairs, lift, ring of inner ledge seats, jets ----
