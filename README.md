@@ -84,11 +84,21 @@ above is what the browser actually talks to). Endpoints:
 - `GET /api/schedule` — cached schedule (refetches from UBC if the cache, default 10 min, is stale)
 - `POST /api/schedule/refresh` — force a fresh fetch from UBC
 - `GET /api/health` — health check
-- `GET /api/swim-records` — full swim history, most recent first (powers the **My Records** tab)
+- `GET /api/swim-records` — the signed-in user's swim history, most recent first (powers the **My Records** tab)
 - `GET /api/swim-records/occupied-lanes` — lanes (1–10) currently in use
 - `POST /api/swim-records` — start a swim (character, pool length, optional lane)
 - `PATCH /api/swim-records/{id}` — finish a swim, recording the distance actually swum
 - `DELETE /api/swim-records/{id}` — delete a record
+
+Social layer (all require a bearer token):
+
+- `GET /api/friends` — accepted friends with live presence (`inPool`, `lane`, `poolLength` while they have an active swim)
+- `GET /api/friends/search?q=` — find people by name/email (annotated with the current relationship)
+- `GET/POST /api/friends/requests`, `POST /api/friends/requests/{id}/accept|decline`, `DELETE /api/friends/{userId}` — Instagram-style friend graph
+- `GET /api/friends/{userId}/records` — a friend's swim history (friends only)
+- `GET/POST /api/messages/{friendId}`, `GET /api/messages/unread` — direct messages between friends (polling chat)
+- `GET/POST /api/invites`, `POST /api/invites/{id}/accept|decline` — "swim together" invites tied to a real schedule session; accepting notifies **both** users
+- `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/read-all` — in-app notification feed (header bell)
 
 The backend fetches 7 daily windows from `recreation.ubc.ca/pm-feed` concurrently, filters to only `Drop-in - 25m Length Swim` / `Drop-in - 50m Length Swim` sessions (excluding Aqua Fitness, Community Swim, Sensory-Sensitive, and 2STNB swims), and caches the merged result in memory.
 
@@ -112,7 +122,11 @@ npm run dev
 
 Runs on `https://du8yrnvuprbic.cloudfront.net` by default and expects the backend at `https://d1q6dtl87ueyeb.cloudfront.net` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
 
-Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page.
+Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page — over a dark, cinematic "Deep Water" theme (`src/theme.css`): a deep-navy backdrop with slowly drifting aurora light blobs, bold Sora display type, and micro-interactions on every control.
+
+The 3D Pool scene (`Pool3D.tsx`) is a virtual UBC Aquatic Centre: the pool sits inside a natatorium shell with glass curtain walls and mullions, a wood-soffit roof band with skylight, exposed steel roof trusses, concrete columns, spectator bleachers, backstroke-flag lines, wall signage and a pace clock. The walls and roof are rendered front-side-only "dollhouse" style, so the orbit camera always sees into the hall. The water surface is a live vertex-animated ripple mesh.
+
+A **Friends** tab makes the app social: search for swimmers, send/accept friend requests, open a friend's profile to browse their swim records and stats, chat with them (polling DM thread), and send a **swim-together invite** pinned to a real session from the UBC schedule. When the friend accepts, both users are notified via the header bell, the confirmed plan appears under "Swim plans" for both — and whenever a friend has an active swim, they appear **live in the 3D pool** in their actual lane with a floating name tag (plus an "in the pool now" badge on their friend card), so you can go find them in person.
 
 ## Docker
 
