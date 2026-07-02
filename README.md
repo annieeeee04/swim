@@ -96,9 +96,17 @@ Social layer (all require a bearer token):
 - `GET /api/friends/search?q=` — find people by name/email (annotated with the current relationship)
 - `GET/POST /api/friends/requests`, `POST /api/friends/requests/{id}/accept|decline`, `DELETE /api/friends/{userId}` — Instagram-style friend graph
 - `GET /api/friends/{userId}/records` — a friend's swim history (friends only)
-- `GET/POST /api/messages/{friendId}`, `GET /api/messages/unread` — direct messages between friends (polling chat)
+- `GET/POST /api/messages/{friendId}`, `GET /api/messages/unread` — direct messages between friends
 - `GET/POST /api/invites`, `POST /api/invites/{id}/accept|decline` — "swim together" invites tied to a real schedule session; accepting notifies **both** users
 - `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/read-all` — in-app notification feed (header bell)
+- `WS /ws` — real-time push channel (`PushService`). The client sends
+  `{"token": "<bearer token>"}` as its first frame (first-message auth keeps
+  tokens out of URLs/access logs); the server then pushes
+  `notification` / `message` / `social` / `presence` events the moment they
+  happen — new DMs land in open chat windows instantly, the bell badge bumps
+  live, and friends appear in the 3D pool the second they start a swim. REST
+  stays the source of truth; the frontend keeps slow (20–60s) polling as a
+  safety net, so a dropped socket degrades gracefully instead of breaking.
 
 The backend fetches 7 daily windows from `recreation.ubc.ca/pm-feed` concurrently, filters to only `Drop-in - 25m Length Swim` / `Drop-in - 50m Length Swim` sessions (excluding Aqua Fitness, Community Swim, Sensory-Sensitive, and 2STNB swims), and caches the merged result in memory.
 
@@ -126,7 +134,9 @@ Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh butt
 
 The 3D Pool scene (`Pool3D.tsx`) is a virtual UBC Aquatic Centre: the pool sits inside a natatorium shell with glass curtain walls and mullions, a wood-soffit roof band with skylight, exposed steel roof trusses, concrete columns, spectator bleachers, backstroke-flag lines, wall signage and a pace clock. The walls and roof are rendered front-side-only "dollhouse" style, so the orbit camera always sees into the hall. The water surface is a live vertex-animated ripple mesh.
 
-A **Friends** tab makes the app social: search for swimmers, send/accept friend requests, open a friend's profile to browse their swim records and stats, chat with them (polling DM thread), and send a **swim-together invite** pinned to a real session from the UBC schedule. When the friend accepts, both users are notified via the header bell, the confirmed plan appears under "Swim plans" for both — and whenever a friend has an active swim, they appear **live in the 3D pool** in their actual lane with a floating name tag (plus an "in the pool now" badge on their friend card), so you can go find them in person.
+A **Friends** tab makes the app social: search for swimmers, send/accept friend requests, open a friend's profile to browse their swim records and stats, chat with them, and send a **swim-together invite** pinned to a real session from the UBC schedule. When the friend accepts, both users are notified via the header bell, the confirmed plan appears under "Swim plans" for both — and whenever a friend has an active swim, they appear **live in the 3D pool** in their actual lane with a floating name tag (plus an "in the pool now" badge on their friend card), so you can go find them in person.
+
+All of it is **real-time over WebSockets** (`src/realtime.ts` ⇄ backend `/ws`): one auto-reconnecting socket per signed-in session delivers chat messages, notifications, invite updates and pool presence the instant they happen, with slow polling kept only as a fallback.
 
 ## Docker
 

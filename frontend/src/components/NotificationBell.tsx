@@ -5,9 +5,11 @@ import {
   fetchUnreadNotificationCount,
   markNotificationsRead,
 } from "../api";
+import { onRealtimeEvent } from "../realtime";
 import type { AppNotification, NotificationType } from "../types";
 
-const POLL_MS = 15_000;
+/** Slow safety-net poll only — new notifications arrive live over the WebSocket. */
+const POLL_MS = 60_000;
 
 const TYPE_ICON: Record<NotificationType, string> = {
   FRIEND_REQUEST: "🤝",
@@ -53,6 +55,21 @@ export default function NotificationBell({
     const timer = setInterval(poll, POLL_MS);
     return () => clearInterval(timer);
   }, [poll]);
+
+  // Live updates: a pushed notification bumps the badge instantly (and
+  // refreshes the list if the panel is already open).
+  useEffect(() => {
+    return onRealtimeEvent((event) => {
+      if (event.type !== "notification") return;
+      setCount((c) => c + 1);
+      setItems((current) => {
+        if (current === null) return current; // panel never opened yet
+        const incoming = event.data as AppNotification;
+        if (current.some((n) => n.id === incoming.id)) return current;
+        return [incoming, ...current];
+      });
+    });
+  }, []);
 
   // Close when clicking anywhere outside.
   useEffect(() => {

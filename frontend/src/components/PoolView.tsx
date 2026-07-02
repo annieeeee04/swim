@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CHARACTERS, type Character } from "../data/characters";
 import { fetchFriends, fetchOccupiedLanes, finishSwim, startSwim } from "../api";
+import { onRealtimeEvent } from "../realtime";
 import type { FriendSwimmer3D } from "./Pool3D";
 import type { SwimEvent, SwimRecord, User } from "../types";
 import { buildSlotsByDay, type Slot } from "../utils/slots";
@@ -90,8 +91,9 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
     };
   }, [stage]);
 
-  // While the 3D pool is on screen, poll for friends who are swimming right
-  // now so they appear live in their lanes (and you can go find them IRL).
+  // While the 3D pool is on screen, keep the friends-in-the-pool roster live
+  // so they appear in their lanes (and you can go find them IRL). Presence
+  // changes arrive instantly over the WebSocket; a slow poll is the fallback.
   const poolVisible =
     stage === "lane" || stage === "arriving" || stage === "poolside" ||
     stage === "swimming" || stage === "climbing";
@@ -117,10 +119,14 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
         .catch(() => {});
     };
     load();
-    const timer = setInterval(load, 10_000);
+    const timer = setInterval(load, 60_000);
+    const unsubscribe = onRealtimeEvent((event) => {
+      if (event.type === "presence") load();
+    });
     return () => {
       cancelled = true;
       clearInterval(timer);
+      unsubscribe();
     };
   }, [poolVisible, user]);
 

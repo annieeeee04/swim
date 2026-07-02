@@ -9,6 +9,7 @@ import com.annie.swim.repository.FriendshipRepository;
 import com.annie.swim.repository.SwimRecordRepository;
 import com.annie.swim.repository.UserRepository;
 import com.annie.swim.service.AuthService;
+import com.annie.swim.service.PushService;
 import com.annie.swim.service.SocialService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -44,14 +45,17 @@ public class FriendController {
     private final SwimRecordRepository records;
     private final AuthService auth;
     private final SocialService social;
+    private final PushService push;
 
     public FriendController(FriendshipRepository friendships, UserRepository users,
-                            SwimRecordRepository records, AuthService auth, SocialService social) {
+                            SwimRecordRepository records, AuthService auth, SocialService social,
+                            PushService push) {
         this.friendships = friendships;
         this.users = users;
         this.records = records;
         this.auth = auth;
         this.social = social;
+        this.push = push;
     }
 
     /** Accepted friends with live pool presence (lane + pool if mid-swim). */
@@ -161,6 +165,7 @@ public class FriendController {
         Friendship f = friendships.save(new Friendship(me.getId(), other.getId()));
         social.notify(other.getId(), Notification.Type.FRIEND_REQUEST,
                 me.getDisplayName() + " sent you a friend request", f.getId());
+        push.sendToUser(other.getId(), "social", null);
         return new RequestView(f.getId(), UserSummary.from(other), f.getCreatedAt());
     }
 
@@ -176,6 +181,7 @@ public class FriendController {
         User requester = users.findById(f.getRequesterId()).orElse(null);
         social.notify(f.getRequesterId(), Notification.Type.FRIEND_ACCEPTED,
                 me.getDisplayName() + " accepted your friend request — you're now friends!", f.getId());
+        push.sendToUser(f.getRequesterId(), "social", null);
         return new RequestView(f.getId(),
                 requester != null ? UserSummary.from(requester) : null, f.getCreatedAt());
     }
@@ -187,6 +193,7 @@ public class FriendController {
         User me = auth.requireUser(authHeader);
         Friendship f = pendingRequestFor(me, id);
         friendships.delete(f);
+        push.sendToUser(f.getRequesterId(), "social", null);
     }
 
     @DeleteMapping("/{friendUserId}")
@@ -195,6 +202,7 @@ public class FriendController {
             @PathVariable Long friendUserId) {
         User me = auth.requireUser(authHeader);
         friendships.findBetween(me.getId(), friendUserId).ifPresent(friendships::delete);
+        push.sendToUser(friendUserId, "social", null);
     }
 
     /** A friend's swim history (friends only — this is the "check their records" view). */

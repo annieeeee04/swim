@@ -9,7 +9,8 @@ import "./components/AuthScreen.css";
 import "./components/Leaderboard.css";
 import "./components/FriendsView.css";
 import "./theme.css";
-import { fetchSchedule, refreshSchedule } from "./api";
+import { fetchSchedule, getAuthToken, refreshSchedule } from "./api";
+import { connectRealtime, disconnectRealtime } from "./realtime";
 import { useAuth } from "./auth/AuthContext";
 import PoolView from "./components/PoolView";
 import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
@@ -97,6 +98,16 @@ function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (user && !started) setStarted(true);
   }, [user, started]);
+
+  // Live push channel: one WebSocket per signed-in session, carrying friend
+  // presence, chat messages, invites and notifications in real time.
+  useEffect(() => {
+    if (!user) return;
+    const token = getAuthToken();
+    if (!token) return;
+    connectRealtime(token);
+    return () => disconnectRealtime();
+  }, [user]);
 
   if (!started) {
     return (

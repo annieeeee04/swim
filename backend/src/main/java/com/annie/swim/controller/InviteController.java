@@ -7,6 +7,7 @@ import com.annie.swim.model.User;
 import com.annie.swim.repository.SwimInviteRepository;
 import com.annie.swim.repository.UserRepository;
 import com.annie.swim.service.AuthService;
+import com.annie.swim.service.PushService;
 import com.annie.swim.service.SocialService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -44,13 +45,15 @@ public class InviteController {
     private final UserRepository users;
     private final AuthService auth;
     private final SocialService social;
+    private final PushService push;
 
     public InviteController(SwimInviteRepository invites, UserRepository users,
-                            AuthService auth, SocialService social) {
+                            AuthService auth, SocialService social, PushService push) {
         this.invites = invites;
         this.users = users;
         this.auth = auth;
         this.social = social;
+        this.push = push;
     }
 
     /** Every invite you're part of (both directions), newest first. */
@@ -85,6 +88,7 @@ public class InviteController {
         social.notify(body.friendId(), Notification.Type.INVITE,
                 me.getDisplayName() + " invited you to swim together (" + body.poolLength()
                         + "m pool, " + body.sessionStart() + ")", invite.getId());
+        push.sendToUser(body.friendId(), "social", null);
         return toView(invite, me.getId());
     }
 
@@ -107,6 +111,7 @@ public class InviteController {
         social.notify(me.getId(), Notification.Type.INVITE_ACCEPTED,
                 "Swim confirmed with " + (inviter != null ? inviter.getDisplayName() : "your friend")
                         + " — " + invite.getPoolLength() + "m pool (" + when + ")!", invite.getId());
+        push.sendToUser(invite.getInviterId(), "social", null);
         return toView(invite, me.getId());
     }
 
@@ -122,6 +127,7 @@ public class InviteController {
         social.notify(invite.getInviterId(), Notification.Type.INVITE_DECLINED,
                 me.getDisplayName() + " can't make the " + invite.getPoolLength() + "m swim ("
                         + invite.getSessionStart() + ")", invite.getId());
+        push.sendToUser(invite.getInviterId(), "social", null);
         return toView(invite, me.getId());
     }
 
