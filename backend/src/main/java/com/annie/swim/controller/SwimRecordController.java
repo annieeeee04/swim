@@ -4,6 +4,8 @@ import com.annie.swim.model.SwimRecord;
 import com.annie.swim.model.User;
 import com.annie.swim.repository.SwimRecordRepository;
 import com.annie.swim.service.AuthService;
+import com.annie.swim.service.PushService;
+import com.annie.swim.service.SocialService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,10 +34,28 @@ public class SwimRecordController {
 
     private final SwimRecordRepository repository;
     private final AuthService auth;
+    private final SocialService social;
+    private final PushService push;
 
-    public SwimRecordController(SwimRecordRepository repository, AuthService auth) {
+    public SwimRecordController(SwimRecordRepository repository, AuthService auth,
+                                SocialService social, PushService push) {
         this.repository = repository;
         this.auth = auth;
+        this.social = social;
+        this.push = push;
+    }
+
+    /** Tells all of a swimmer's friends, live, that they entered or left the pool. */
+    private void pushPresence(SwimRecord record, boolean inPool) {
+        if (record.getUserId() == null) {
+            return;
+        }
+        push.sendToUsers(social.friendIdsOf(record.getUserId()), "presence",
+                java.util.Map.of(
+                        "userId", record.getUserId(),
+                        "inPool", inPool,
+                        "lane", record.getLane(),
+                        "poolLength", record.getPoolLength()));
     }
 
     /** Swim history for the authenticated user, most recent first. */
@@ -97,7 +117,9 @@ public class SwimRecordController {
         if (user != null) {
             record.setUserId(user.getId());
         }
-        return repository.save(record);
+        SwimRecord saved = repository.save(record);
+        pushPresence(saved, true);
+        return saved;
     }
 
     /**
@@ -114,7 +136,9 @@ public class SwimRecordController {
 
         record.setDistanceMeters(request.distanceMeters());
         record.setCompletedAt(Instant.now());
-        return repository.save(record);
+        SwimRecord saved = repository.save(record);
+        pushPresence(saved, false);
+        return saved;
     }
 
     @ResponseStatus(HttpStatus.NO_CONTENT)

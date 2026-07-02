@@ -5,6 +5,7 @@ import com.annie.swim.model.Notification;
 import com.annie.swim.model.User;
 import com.annie.swim.repository.DirectMessageRepository;
 import com.annie.swim.service.AuthService;
+import com.annie.swim.service.PushService;
 import com.annie.swim.service.SocialService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -30,11 +31,14 @@ public class MessageController {
     private final DirectMessageRepository messages;
     private final AuthService auth;
     private final SocialService social;
+    private final PushService push;
 
-    public MessageController(DirectMessageRepository messages, AuthService auth, SocialService social) {
+    public MessageController(DirectMessageRepository messages, AuthService auth,
+                             SocialService social, PushService push) {
         this.messages = messages;
         this.auth = auth;
         this.social = social;
+        this.push = push;
     }
 
     /** Unread-message counts per sender, for badges on the friend list. */
@@ -81,6 +85,9 @@ public class MessageController {
             text = text.substring(0, 2000);
         }
         DirectMessage saved = messages.save(new DirectMessage(me.getId(), friendId, text));
+        // Instant delivery to any open chat window; the notification below
+        // (also pushed) covers the bell for users elsewhere in the app.
+        push.sendToUser(friendId, "message", saved);
         social.notify(friendId, Notification.Type.MESSAGE,
                 me.getDisplayName() + ": " + (text.length() > 80 ? text.substring(0, 80) + "…" : text),
                 me.getId());

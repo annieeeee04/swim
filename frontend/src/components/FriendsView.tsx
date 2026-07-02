@@ -27,12 +27,15 @@ import type {
   UserSummary,
 } from "../types";
 import type { Character } from "../data/characters";
+import { onRealtimeEvent } from "../realtime";
 import { buildSlotsByDay, type Slot } from "../utils/slots";
 import { formatDayHeading, formatTime } from "../utils/time";
 import SwimmerAvatar from "./SwimmerAvatar";
 
-const FRIENDS_POLL_MS = 12_000;
-const CHAT_POLL_MS = 5_000;
+// Slow safety-net polls only — presence, chat, requests and invites all
+// arrive live over the WebSocket (see ../realtime.ts).
+const FRIENDS_POLL_MS = 60_000;
+const CHAT_POLL_MS = 20_000;
 
 /** A friend's avatar colors as a Character for the 2D SwimmerAvatar. */
 function friendCharacter(u: UserSummary): Character {
@@ -118,6 +121,25 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
     const timer = setInterval(refreshSocial, FRIENDS_POLL_MS);
     return () => clearInterval(timer);
   }, [refreshSocial]);
+
+  // Live updates over the WebSocket: presence changes and friend-graph /
+  // invite mutations trigger an immediate refetch; incoming chat messages
+  // land straight in the open thread.
+  useEffect(() => {
+    return onRealtimeEvent((event) => {
+      if (event.type === "social" || event.type === "presence") {
+        refreshSocial();
+      } else if (event.type === "message") {
+        const msg = event.data as ChatMessage;
+        if (msg.senderId === selectedId) {
+          setConversation((c) => (c.some((m) => m.id === msg.id) ? c : [...c, msg]));
+        } else {
+          // Bump the sender's unread badge without waiting for the next poll.
+          setUnread((u) => ({ ...u, [msg.senderId]: (u[msg.senderId] ?? 0) + 1 }));
+        }
+      }
+    });
+  }, [refreshSocial, selectedId]);
 
   // ---- debounced people search ----
   useEffect(() => {
