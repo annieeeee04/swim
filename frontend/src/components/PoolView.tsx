@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CHARACTERS, type Character } from "../data/characters";
-import { fetchOccupiedLanes, finishSwim, startSwim } from "../api";
+import { fetchFriends, fetchOccupiedLanes, finishSwim, startSwim } from "../api";
+import type { FriendSwimmer3D } from "./Pool3D";
 import type { SwimEvent, SwimRecord, User } from "../types";
+import { buildSlotsByDay, type Slot } from "../utils/slots";
 import { formatDayHeading, formatTime } from "../utils/time";
 import type { SwimmerPose3D } from "./Pool3D";
 import SwimmerAvatar from "./SwimmerAvatar";
@@ -24,46 +26,7 @@ type Stage =
   | "distance"
   | "summary";
 
-interface Slot {
-  start: string;
-  end: string;
-  lengths: (25 | 50)[];
-}
-
 const CLIMB_MS = 800;
-
-/** Groups the schedule into unique time slots (start–end), noting which pool
- *  length(s) are actually offered at each one — some slots only run a 25m
- *  session, others run 25m and 50m side by side. */
-function buildSlotsByDay(events: SwimEvent[]): [string, Slot[]][] {
-  const slotMap = new Map<string, Slot>();
-  for (const ev of events) {
-    const key = `${ev.start}|${ev.end}`;
-    const length: 25 | 50 = (ev.title ?? "").toLowerCase().includes("50m") ? 50 : 25;
-    const existing = slotMap.get(key);
-    if (existing) {
-      if (!existing.lengths.includes(length)) existing.lengths.push(length);
-    } else {
-      slotMap.set(key, { start: ev.start, end: ev.end, lengths: [length] });
-    }
-  }
-
-  const dayMap = new Map<string, Slot[]>();
-  for (const slot of slotMap.values()) {
-    slot.lengths.sort((a, b) => a - b);
-    const dayKey = slot.start.slice(0, 10);
-    const existing = dayMap.get(dayKey);
-    if (existing) {
-      existing.push(slot);
-    } else {
-      dayMap.set(dayKey, [slot]);
-    }
-  }
-
-  return Array.from(dayMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dayKey, slots]) => [dayKey, [...slots].sort((a, b) => a.start.localeCompare(b.start))]);
-}
 
 const PREVIEW_POSES = ["stand", "swim", "climb"] as const;
 const POSE_LABEL: Record<(typeof PREVIEW_POSES)[number], string> = {
@@ -86,6 +49,7 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
   const [distanceInput, setDistanceInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [friendSwimmers, setFriendSwimmers] = useState<FriendSwimmer3D[]>([]);
 
   const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
 
@@ -125,6 +89,40 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
       cancelled = true;
     };
   }, [stage]);
+
+  // While the 3D pool is on screen, poll for friends who are swimming right
+  // now so they appear live in their lanes (and you can go find them IRL).
+  const poolVisible =
+    stage === "lane" || stage === "arriving" || stage === "poolside" ||
+    stage === "swimming" || stage === "climbing";
+  useEffect(() => {
+    if (!poolVisible || !user) return;
+    let cancelled = false;
+    const load = () => {
+      fetchFriends()
+        .then((friends) => {
+          if (cancelled) return;
+          setFriendSwimmers(
+            friends
+              .filter((f) => f.inPool && f.lane != null)
+              .map((f) => ({
+                name: f.user.displayName,
+                lane: f.lane as number,
+                suit: f.user.avatarSuit,
+                skin: f.user.avatarSkin,
+                cap: f.user.avatarCap,
+              })),
+          );
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [poolVisible, user]);
 
   // Once we've "arrived" at the pool deck (centered), walk over to the assigned lane.
   useEffect(() => {
@@ -410,6 +408,12 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
           <p className="pool-meta">
             🎮 WASD/arrows to walk, Enter to pick — or drag to rotate, scroll/pinch to zoom, tap an open lane below.
           </p>
+          {friendSwimmers.length > 0 && (
+            <p className="pool-meta pool-friends-note">
+              🌊 In the pool now:{" "}
+              {friendSwimmers.map((f) => `${f.name} (Lane ${f.lane})`).join(" · ")}
+            </p>
+          )}
           <div className="pool-arena">
             <SwimSchool count={4} seed={11} className="pool-school" />
             <div className="pool-stage pool-stage-big">
@@ -418,6 +422,7 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
                   activeLane={null}
                   onPickLane={handlePickLane}
                   occupiedLanes={occupiedLanes}
+                  friends={friendSwimmers}
                   roamer={{
                     modelUrl: character.modelUrl,
                     modelScale: character.modelScale,
@@ -452,6 +457,7 @@ export default function PoolView({ events, user }: { events: SwimEvent[]; user?:
               <Suspense fallback={<div className="pool3d-loading">Loading the pool…</div>}>
                 <Pool3D
                   activeLane={record.lane}
+                  friends={friendSwimmers}
                   swimmer={{
                     suit: character.suit,
                     skin: character.skin,

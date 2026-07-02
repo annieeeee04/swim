@@ -1,7 +1,14 @@
 import type {
+  AppNotification,
   AuthResponse,
+  ChatMessage,
+  FriendRequest,
+  FriendRequests,
+  FriendSearchHit,
+  FriendView,
   LeaderboardEntry,
   ScheduleResponse,
+  SwimInvite,
   SwimRecord,
   User,
 } from "./types";
@@ -204,6 +211,154 @@ export async function fetchOAuthUrl(provider: "google" | "facebook"): Promise<st
   }
   const data: { authorizeUrl: string } = await res.json();
   return data.authorizeUrl;
+}
+
+// ===================== friends =====================
+
+export async function fetchFriends(): Promise<FriendView[]> {
+  const res = await fetch(`${API_BASE}/api/friends`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load your friends.");
+  return res.json();
+}
+
+export async function searchUsers(q: string): Promise<FriendSearchHit[]> {
+  const res = await fetch(`${API_BASE}/api/friends/search?q=${encodeURIComponent(q)}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Search failed.");
+  return res.json();
+}
+
+export async function fetchFriendRequests(): Promise<FriendRequests> {
+  const res = await fetch(`${API_BASE}/api/friends/requests`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load friend requests.");
+  return res.json();
+}
+
+export async function sendFriendRequest(userId: number): Promise<FriendRequest> {
+  const res = await fetch(`${API_BASE}/api/friends/requests`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) await failure(res, "Couldn't send the friend request.");
+  return res.json();
+}
+
+export async function respondFriendRequest(
+  requestId: number,
+  action: "accept" | "decline",
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/friends/requests/${requestId}/${action}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't update the friend request.");
+}
+
+export async function unfriend(friendUserId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/friends/${friendUserId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't remove this friend.");
+}
+
+/** A friend's full swim history — the "check their records" view. */
+export async function fetchFriendRecords(friendUserId: number): Promise<SwimRecord[]> {
+  const res = await fetch(`${API_BASE}/api/friends/${friendUserId}/records`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't load your friend's records.");
+  return res.json();
+}
+
+// ===================== messages =====================
+
+export async function fetchConversation(friendId: number): Promise<ChatMessage[]> {
+  const res = await fetch(`${API_BASE}/api/messages/${friendId}`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load the conversation.");
+  return res.json();
+}
+
+export async function sendChatMessage(friendId: number, body: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/api/messages/${friendId}`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) await failure(res, "Couldn't send the message.");
+  return res.json();
+}
+
+/** Unread DM counts keyed by sender id (friend-list badges). */
+export async function fetchUnreadMessageCounts(): Promise<Record<number, number>> {
+  const res = await fetch(`${API_BASE}/api/messages/unread`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load unread counts.");
+  return res.json();
+}
+
+// ===================== swim invites =====================
+
+export interface CreateInvitePayload {
+  friendId: number;
+  sessionStart: string; // "yyyy-MM-dd HH:mm:ss"
+  sessionEnd: string;
+  poolLength: 25 | 50;
+  note?: string;
+}
+
+export async function fetchInvites(): Promise<SwimInvite[]> {
+  const res = await fetch(`${API_BASE}/api/invites`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load swim invites.");
+  return res.json();
+}
+
+export async function sendSwimInvite(payload: CreateInvitePayload): Promise<SwimInvite> {
+  const res = await fetch(`${API_BASE}/api/invites`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await failure(res, "Couldn't send the invite.");
+  return res.json();
+}
+
+export async function respondInvite(
+  inviteId: number,
+  action: "accept" | "decline",
+): Promise<SwimInvite> {
+  const res = await fetch(`${API_BASE}/api/invites/${inviteId}/${action}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't respond to the invite.");
+  return res.json();
+}
+
+// ===================== notifications =====================
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const res = await fetch(`${API_BASE}/api/notifications`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load notifications.");
+  return res.json();
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const res = await fetch(`${API_BASE}/api/notifications/unread-count`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't load notifications.");
+  const data: { count: number } = await res.json();
+  return data.count;
+}
+
+export async function markNotificationsRead(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/notifications/read-all`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't mark notifications read.");
 }
 
 // ===================== leaderboard =====================

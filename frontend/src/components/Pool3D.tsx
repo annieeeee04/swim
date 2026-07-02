@@ -26,6 +26,16 @@ export interface LaneScheduleInfo {
   count: number;
 }
 
+/** A friend who is in the pool right now — rendered live in their lane with a
+ *  floating name tag, so you can spot them and go swim together in person. */
+export interface FriendSwimmer3D {
+  name: string;
+  lane: number;
+  suit: string;
+  skin: string;
+  cap: string;
+}
+
 interface Pool3DProps {
   lanesCount?: number;
   activeLane: number | null;
@@ -41,6 +51,8 @@ interface Pool3DProps {
    *  the deck with WASD/arrow keys, picking the lane they're standing in
    *  front of with Enter/Space (in addition to the existing tap-to-pick). */
   roamer?: { modelUrl: string; modelScale?: number; modelRotationY?: number } | null;
+  /** Friends with an active swim right now, shown live in their lanes. */
+  friends?: FriendSwimmer3D[];
 }
 
 const ROAMER_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", " "]);
@@ -187,6 +199,372 @@ function makeDeckTileTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/** Floating name pill shown above a friend swimming in the pool. */
+function makeNameSprite(name: string): THREE.Sprite {
+  const w = 320;
+  const h = 84;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  const r = h / 2;
+  ctx.fillStyle = "rgba(12, 20, 42, 0.82)";
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arcTo(w, 0, w, h, r);
+  ctx.arcTo(w, h, 0, h, r);
+  ctx.arcTo(0, h, 0, 0, r);
+  ctx.arcTo(0, 0, w, 0, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(94, 234, 212, 0.9)";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.fillStyle = "#e8fbff";
+  ctx.font = "800 38px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const label = `🏊 ${name}`;
+  ctx.fillText(label.length > 16 ? label.slice(0, 16) + "…" : label, w / 2, h / 2 + 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }),
+  );
+  sprite.scale.set((w / h) * 0.4, 0.4, 1);
+  sprite.renderOrder = 30;
+  return sprite;
+}
+
+/** Big wall banner ("UBC AQUATIC CENTRE") drawn onto a canvas plane. */
+function makeSignage(text: string, width: number, height: number): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 160;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#0c2340"; // UBC blue
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 84px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.letterSpacing = "10px";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({ map: texture }),
+  );
+}
+
+/** Poolside pace clock (the big analog training clock on the wall/deck). */
+function makePaceClock(): THREE.Group {
+  const g = new THREE.Group();
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(128, 128, 120, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#0c2340";
+  ctx.lineWidth = 10;
+  ctx.stroke();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.strokeStyle = i % 3 === 0 ? "#e11d48" : "#0c2340";
+    ctx.lineWidth = i % 3 === 0 ? 8 : 4;
+    ctx.beginPath();
+    ctx.moveTo(128 + Math.cos(a) * 96, 128 + Math.sin(a) * 96);
+    ctx.lineTo(128 + Math.cos(a) * 112, 128 + Math.sin(a) * 112);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#e11d48";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(128, 128);
+  ctx.lineTo(128 + 78, 128 - 40);
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.Mesh(
+    new THREE.CircleGeometry(0.45, 32),
+    new THREE.MeshBasicMaterial({ map: texture }),
+  );
+  const stand = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 1.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.6, roughness: 0.35 }),
+  );
+  stand.position.y = -0.75;
+  g.add(face, stand);
+  return g;
+}
+
+/**
+ * The natatorium shell around the pool, modeled on the real UBC Aquatic
+ * Centre: full-height glass curtain walls with vertical mullions, a
+ * wood-soffit roof band with a huge central skylight (kept near-transparent
+ * so the orbit camera can always see in), exposed steel roof trusses,
+ * concrete columns, spectator bleachers, backstroke-flag lines, signage and
+ * a pace clock.
+ */
+function buildNatatorium(opts: {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  wallH: number;
+  deckHeight: number;
+  deckTexture: THREE.Texture;
+  waterCenterX: number;
+  waterLength: number;
+  waterSurfaceY: number;
+  totalWidth: number;
+  /** Where the near apron should stop (the x where the existing deck begins). */
+  nearApronEndX: number;
+}): { group: THREE.Group; flagLines: THREE.Group[] } {
+  const { minX, maxX, minZ, maxZ, wallH, deckHeight, deckTexture, waterCenterX, waterLength, totalWidth } = opts;
+  const group = new THREE.Group();
+  const w = maxX - minX;
+  const d = maxZ - minZ;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+
+  // ---- surrounding deck apron (fills the shell floor around the pool) ----
+  const apronMat = new THREE.MeshStandardMaterial({ map: deckTexture, roughness: 0.8 });
+  const halfPool = totalWidth / 2;
+  // side aprons (±z beyond the lanes)
+  for (const side of [-1, 1]) {
+    const depth = Math.abs((side < 0 ? minZ : maxZ)) - halfPool;
+    if (depth <= 0) continue;
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(w, deckHeight, depth), apronMat);
+    apron.position.set(cx, deckHeight / 2, side * (halfPool + depth / 2));
+    group.add(apron);
+  }
+  // far apron (beyond the turn end of the water)
+  const farStart = waterCenterX + waterLength / 2;
+  if (maxX > farStart) {
+    const apron = new THREE.Mesh(
+      new THREE.BoxGeometry(maxX - farStart, deckHeight, totalWidth),
+      apronMat,
+    );
+    apron.position.set((farStart + maxX) / 2, deckHeight / 2, 0);
+    group.add(apron);
+  }
+  // near apron (behind the starting blocks, meeting the existing deck exactly)
+  const nearEnd = opts.nearApronEndX;
+  if (nearEnd > minX) {
+    const apron = new THREE.Mesh(
+      new THREE.BoxGeometry(nearEnd - minX, deckHeight, d),
+      apronMat,
+    );
+    apron.position.set((minX + nearEnd) / 2, deckHeight / 2, cz);
+    group.add(apron);
+  }
+
+  // ---- glass curtain walls + mullions ----
+  // Front-side only, with every pane's normal facing the pool: from inside
+  // the hall you see glass all around, but the orbit camera (which sits
+  // outside the shell) always sees straight through — the classic
+  // "dollhouse cutaway" so architecture never blocks the view.
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xa8d8ff,
+    transparent: true,
+    opacity: 0.12,
+    roughness: 0.05,
+    metalness: 0.3,
+    side: THREE.FrontSide,
+    depthWrite: false,
+  });
+  const mullionMat = new THREE.MeshStandardMaterial({ color: 0xdde4ea, roughness: 0.45, metalness: 0.4 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0xb08a5a, roughness: 0.65 });
+
+  const walls: { w: number; x: number; z: number; rotY: number }[] = [
+    { w, x: cx, z: minZ, rotY: 0 },
+    { w, x: cx, z: maxZ, rotY: Math.PI },
+    { w: d, x: minX, z: cz, rotY: Math.PI / 2 },
+    { w: d, x: maxX, z: cz, rotY: -Math.PI / 2 },
+  ];
+  for (const wall of walls) {
+    const alongX = wall.rotY === 0 || wall.rotY === Math.PI;
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(wall.w, wallH), glassMat);
+    pane.position.set(wall.x, wallH / 2, wall.z);
+    pane.rotation.y = wall.rotY;
+    group.add(pane);
+
+    // vertical mullions every ~1.6m + top/bottom rails
+    const count = Math.floor(wall.w / 1.6);
+    for (let i = 0; i <= count; i++) {
+      const off = -wall.w / 2 + (wall.w * i) / count;
+      const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.07, wallH, 0.07), mullionMat);
+      mullion.position.set(
+        alongX ? wall.x + off : wall.x,
+        wallH / 2,
+        alongX ? wall.z : wall.z + off,
+      );
+      group.add(mullion);
+    }
+    for (const railY of [wallH * 0.55, wallH - 0.06]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(wall.w, 0.1, 0.08), woodMat);
+      rail.position.set(wall.x, railY, wall.z);
+      rail.rotation.y = wall.rotY;
+      group.add(rail);
+    }
+  }
+
+  // ---- concrete columns at the corners and midspans ----
+  const columnMat = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7 });
+  const columnSpots: [number, number][] = [
+    [minX, minZ], [minX, maxZ], [maxX, minZ], [maxX, maxZ],
+    [cx, minZ], [cx, maxZ], [minX, cz], [maxX, cz],
+  ];
+  for (const [px, pz] of columnSpots) {
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, wallH, 12), columnMat);
+    column.position.set(px, wallH / 2, pz);
+    group.add(column);
+  }
+
+  // ---- roof: wood-soffit perimeter band + near-clear skylight ----
+  // The band planes face DOWN (front side only), so from the orbit camera
+  // above they're invisible and never block the pool; from a low angle
+  // inside you see the warm wood ceiling, like the real building.
+  const roofY = wallH + 0.08;
+  const band = 1.2;
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0x9a7248, roughness: 0.6, side: THREE.FrontSide });
+  const roofBands: [number, number, number, number][] = [
+    // [width, depth, x, z]
+    [w, band, cx, minZ + band / 2],
+    [w, band, cx, maxZ - band / 2],
+    [band, d - band * 2, minX + band / 2, cz],
+    [band, d - band * 2, maxX - band / 2, cz],
+  ];
+  for (const [bw, bd, bx, bz] of roofBands) {
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(bw, bd), bandMat);
+    slab.rotation.x = Math.PI / 2; // normal points down
+    slab.position.set(bx, roofY, bz);
+    group.add(slab);
+  }
+  const skylight = new THREE.Mesh(
+    new THREE.PlaneGeometry(w - band * 2, d - band * 2),
+    new THREE.MeshStandardMaterial({
+      color: 0xdff1ff,
+      transparent: true,
+      opacity: 0.06,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  skylight.rotation.x = -Math.PI / 2;
+  skylight.position.set(cx, roofY, cz);
+  group.add(skylight);
+
+  // ---- exposed steel trusses spanning the short axis ----
+  const trussMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4, metalness: 0.5 });
+  const trussCount = 6;
+  for (let i = 1; i < trussCount; i++) {
+    const tx = minX + (w * i) / trussCount;
+    const bottomY = wallH - 0.55;
+    const chordBottom = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, d - 0.3), trussMat);
+    chordBottom.position.set(tx, bottomY, cz);
+    group.add(chordBottom);
+    const chordTop = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, d - 0.3), trussMat);
+    chordTop.position.set(tx, roofY - 0.1, cz);
+    group.add(chordTop);
+    // diagonal web members
+    const webCount = 8;
+    for (let s = 0; s < webCount; s++) {
+      const z0 = minZ + 0.15 + ((d - 0.3) * s) / webCount;
+      const z1 = minZ + 0.15 + ((d - 0.3) * (s + 1)) / webCount;
+      const web = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 1, 6), trussMat);
+      const midZ = (z0 + z1) / 2;
+      const dy = roofY - 0.1 - bottomY;
+      const dz = z1 - z0;
+      web.scale.y = Math.hypot(dy, dz);
+      web.position.set(tx, (bottomY + roofY - 0.1) / 2, midZ);
+      web.rotation.x = Math.atan2(dz, dy) * (s % 2 === 0 ? 1 : -1);
+      group.add(web);
+    }
+  }
+
+  // ---- spectator bleachers along the far (turn) end ----
+  const seatMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.55 });
+  const stepMat = new THREE.MeshStandardMaterial({ color: 0xd7dde3, roughness: 0.75 });
+  const bleacherSpan = Math.min(d - 2, totalWidth - 2);
+  const rows = 3;
+  for (let r = 0; r < rows; r++) {
+    const bx = maxX - 0.7 - r * 0.62;
+    const by = deckHeight + 0.28 + r * 0.3;
+    const step = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3 + r * 0.3, bleacherSpan), stepMat);
+    step.position.set(bx, (deckHeight + 0.15) + (0.3 + r * 0.3) / 2 - 0.15 + deckHeight / 2, cz);
+    group.add(step);
+    // bench seat strip on top of each step
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, bleacherSpan), seatMat);
+    seat.position.set(bx, by + 0.12, cz);
+    group.add(seat);
+  }
+
+  // ---- backstroke flag lines across the pool near each end ----
+  const flagLines: THREE.Group[] = [];
+  const flagXs = [waterCenterX - waterLength / 2 + 1.2, waterCenterX + waterLength / 2 - 1.2];
+  const flagColors = [0x0c2340, 0xffd43b]; // UBC navy + gold pennants
+  for (const fx of flagXs) {
+    const line = new THREE.Group();
+    const ropeY = 1.35;
+    const rope = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, totalWidth + 1.6, 6),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4 }),
+    );
+    rope.rotation.x = Math.PI / 2;
+    rope.position.set(fx, ropeY, 0);
+    line.add(rope);
+    // poles at both ends
+    for (const side of [-1, 1]) {
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.035, ropeY + 0.25, 8),
+        new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.6, roughness: 0.3 }),
+      );
+      pole.position.set(fx, (ropeY + 0.25) / 2, side * (totalWidth / 2 + 0.7));
+      line.add(pole);
+    }
+    // triangular pennants
+    const pennantShape = new THREE.Shape();
+    pennantShape.moveTo(0, 0);
+    pennantShape.lineTo(0.14, 0);
+    pennantShape.lineTo(0.07, -0.22);
+    pennantShape.closePath();
+    const pennantGeo = new THREE.ShapeGeometry(pennantShape);
+    for (let z = -totalWidth / 2 + 0.4, i = 0; z <= totalWidth / 2 - 0.4; z += 0.55, i++) {
+      const pennant = new THREE.Mesh(
+        pennantGeo,
+        new THREE.MeshStandardMaterial({
+          color: flagColors[i % 2],
+          side: THREE.DoubleSide,
+          roughness: 0.6,
+        }),
+      );
+      pennant.rotation.y = Math.PI / 2;
+      pennant.position.set(fx, ropeY - 0.01, z);
+      line.add(pennant);
+    }
+    group.add(line);
+    flagLines.push(line);
+  }
+
+  // ---- signage + pace clock ----
+  // On the back wall, facing the default camera across the water.
+  const sign = makeSignage("UBC  AQUATIC  CENTRE", Math.min(9, w * 0.55), 0.9);
+  sign.position.set(cx, wallH - 1.0, minZ + 0.12);
+  group.add(sign);
+
+  const clock = makePaceClock();
+  clock.position.set(minX + 1.0, 2.05, minZ + 0.35);
+  group.add(clock);
+
+  return { group, flagLines };
+}
+
 /** Lane-rope color, FINA-style banding inspired by the Olympic reference photo:
  *  outer lanes red, next band blue, innermost lanes yellow. */
 function laneLineColor(dividerIndex: number, lanesCount: number): number {
@@ -213,6 +591,7 @@ export default function Pool3D({
   splashTrigger = 0,
   laneInfo,
   roamer = null,
+  friends = [],
 }: Pool3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lanePlanesRef = useRef<THREE.Mesh[]>([]);
@@ -236,7 +615,11 @@ export default function Pool3D({
     swimmer,
     laneInfo,
     roamer,
+    friends,
   });
+  const friendsGroupRef = useRef<THREE.Group | null>(null);
+  const friendMeshesRef = useRef<{ group: THREE.Group; inner: THREE.Group; lane: number; phase: number; speed: number }[]>([]);
+  const lastFriendsRef = useRef<FriendSwimmer3D[] | null>(null);
   const splashGroupRef = useRef<THREE.Group | null>(null);
   const splashesRef = useRef<{ mesh: THREE.Mesh; born: number }[]>([]);
   const elapsedRef = useRef(0);
@@ -245,8 +628,8 @@ export default function Pool3D({
   // Keep the imperative render loop reading the latest props without
   // tearing the whole three.js scene down and rebuilding it every render.
   useEffect(() => {
-    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer };
-  }, [activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer]);
+    stateRef.current = { activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer, friends };
+  }, [activeLane, occupiedLanes, onPickLane, swimmer, laneInfo, roamer, friends]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -265,7 +648,7 @@ export default function Pool3D({
     scene.background = null;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 11.5, 12.5);
+    camera.position.set(2.5, 12.5, 15.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -278,7 +661,7 @@ export default function Pool3D({
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.minDistance = 6;
-    controls.maxDistance = 24;
+    controls.maxDistance = 30;
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.update();
 
@@ -325,19 +708,46 @@ export default function Pool3D({
     basin.position.set(waterCenterX, -WATER_DEPTH / 2, 0);
     scene.add(basin);
 
+    // Animated water: a segmented plane whose vertices ripple every frame in
+    // the render loop, so the surface reads as living water rather than glass.
+    const waterGeo = new THREE.PlaneGeometry(WATER_LENGTH, totalWidth, 40, 56);
     const waterSurface = new THREE.Mesh(
-      new THREE.PlaneGeometry(WATER_LENGTH, totalWidth),
+      waterGeo,
       new THREE.MeshStandardMaterial({
         color: 0x18a3e8,
         transparent: true,
         opacity: 0.62,
-        roughness: 0.1,
-        metalness: 0.15,
+        roughness: 0.08,
+        metalness: 0.2,
       }),
     );
     waterSurface.rotation.x = -Math.PI / 2;
     waterSurface.position.set(waterCenterX, waterSurfaceY, 0);
     scene.add(waterSurface);
+
+    // ---------- natatorium shell (UBC Aquatic Centre architecture) ----------
+    const apronTexture = makeDeckTileTexture();
+    apronTexture.repeat.set(14, 16);
+    const { group: buildingGroup } = buildNatatorium({
+      minX: -5.4,
+      maxX: 12.6,
+      minZ: -halfWidth - 2.0,
+      maxZ: halfWidth + 2.0,
+      wallH: 5.4,
+      deckHeight: DECK_HEIGHT,
+      deckTexture: apronTexture,
+      waterCenterX,
+      waterLength: WATER_LENGTH,
+      waterSurfaceY,
+      totalWidth,
+      nearApronEndX: -DECK_LENGTH,
+    });
+    scene.add(buildingGroup);
+
+    // ---------- friends currently in the pool ----------
+    const friendsGroup = new THREE.Group();
+    scene.add(friendsGroup);
+    friendsGroupRef.current = friendsGroup;
 
     // lane lines (colored rope-style dividers — red outer, blue mid, yellow center,
     // matching the Olympic reference photo's banding)
@@ -533,7 +943,90 @@ export default function Pool3D({
         swimmer: curSwimmer,
         laneInfo: curLaneInfo,
         roamer: curRoamer,
+        friends: curFriends,
       } = stateRef.current;
+
+      // ---- living water: ripple the surface vertices ----
+      {
+        const positions = waterGeo.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          const vx = positions.getX(i);
+          const vy = positions.getY(i);
+          positions.setZ(
+            i,
+            Math.sin(vx * 1.5 + t * 1.6) * 0.028 + Math.sin(vy * 1.9 - t * 1.15 + vx * 0.6) * 0.022,
+          );
+        }
+        positions.needsUpdate = true;
+        waterGeo.computeVertexNormals();
+      }
+
+      // ---- friends in the pool: rebuild on change, then swim them around ----
+      if (curFriends !== lastFriendsRef.current) {
+        lastFriendsRef.current = curFriends;
+        for (const fm of friendMeshesRef.current) {
+          friendsGroup.remove(fm.group);
+          fm.group.traverse((obj) => {
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite) {
+              if ("geometry" in obj && obj.geometry) obj.geometry.dispose();
+              const material = (obj as THREE.Mesh).material;
+              if (Array.isArray(material)) material.forEach((m) => m.dispose());
+              else if (material) material.dispose();
+            }
+          });
+        }
+        friendMeshesRef.current = [];
+        (curFriends ?? []).forEach((friend, index) => {
+          if (friend.lane < 1 || friend.lane > lanesCount) return;
+          const fGroup = new THREE.Group();
+          // horizontal swimmer body (capsule + head + cap), same style as the placeholder
+          const inner = new THREE.Group();
+          const body = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.22, 0.46, 4, 12),
+            new THREE.MeshStandardMaterial({ color: friend.suit, roughness: 0.5 }),
+          );
+          inner.add(body);
+          const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.17, 16, 16),
+            new THREE.MeshStandardMaterial({ color: friend.skin, roughness: 0.7 }),
+          );
+          head.position.y = 0.5;
+          inner.add(head);
+          const cap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.175, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
+            new THREE.MeshStandardMaterial({ color: friend.cap, roughness: 0.45 }),
+          );
+          cap.position.y = 0.53;
+          inner.add(cap);
+          inner.rotation.z = Math.PI / 2; // lie flat, swimming down the lane
+          fGroup.add(inner);
+
+          const tag = makeNameSprite(friend.name);
+          tag.position.y = 0.85;
+          fGroup.add(tag);
+
+          friendsGroup.add(fGroup);
+          friendMeshesRef.current.push({
+            group: fGroup,
+            inner,
+            lane: friend.lane,
+            phase: index * 1.7 + friend.lane * 0.9,
+            speed: 0.22 + (index % 3) * 0.05,
+          });
+        });
+      }
+      for (const fm of friendMeshesRef.current) {
+        const z = laneZ(fm.lane);
+        const along = Math.sin(t * fm.speed + fm.phase);
+        const heading = Math.cos(t * fm.speed + fm.phase);
+        fm.group.position.set(
+          waterCenterX + along * (WATER_LENGTH / 2 - 1.3),
+          waterSurfaceY + 0.16 + Math.sin(t * 2.1 + fm.phase) * 0.045,
+          z,
+        );
+        fm.group.rotation.y = heading >= 0 ? Math.PI : 0;
+        fm.inner.rotation.x = Math.sin(t * 3.2 + fm.phase) * 0.08; // gentle stroke roll
+      }
 
       // ---- roamer: walk along the deck with WASD/arrows, Enter/Space to pick ----
       const rGroup = roamerGroupRef.current;
@@ -673,6 +1166,8 @@ export default function Pool3D({
       });
       container.removeChild(renderer.domElement);
       loadedModelUrlRef.current = null;
+      friendMeshesRef.current = [];
+      lastFriendsRef.current = null;
     };
     // Scene is built once per lane-count; everything else flows through stateRef.
   }, [lanesCount]);

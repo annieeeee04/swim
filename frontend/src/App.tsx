@@ -7,12 +7,16 @@ import "./components/IntroPage.css";
 import "./components/AquaticCenterSchedule.css";
 import "./components/AuthScreen.css";
 import "./components/Leaderboard.css";
+import "./components/FriendsView.css";
+import "./theme.css";
 import { fetchSchedule, refreshSchedule } from "./api";
 import { useAuth } from "./auth/AuthContext";
 import PoolView from "./components/PoolView";
 import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
 import RecordsView from "./components/RecordsView";
 import Leaderboard from "./components/Leaderboard";
+import FriendsView from "./components/FriendsView";
+import NotificationBell from "./components/NotificationBell";
 import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
 import AuthScreen from "./components/AuthScreen";
@@ -21,7 +25,7 @@ import SwimmerAvatar from "./components/SwimmerAvatar";
 import type { Character } from "./data/characters";
 import type { PoolFilter, SwimEvent, User } from "./types";
 
-type Tab = "schedule" | "pool" | "records" | "ranking";
+type Tab = "schedule" | "pool" | "friends" | "records" | "ranking";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -142,6 +146,7 @@ function App() {
         </div>
 
         <div className="user-chip">
+          <NotificationBell onGoToFriends={() => setTab("friends")} />
           <span className="user-chip-avatar">
             {user.photoUrl ? (
               <img src={user.photoUrl} alt="" />
@@ -165,6 +170,12 @@ function App() {
         </button>
         <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
           Pool
+        </button>
+        <button
+          className={`tab ${tab === "friends" ? "active" : ""}`}
+          onClick={() => setTab("friends")}
+        >
+          Friends
         </button>
         <button
           className={`tab ${tab === "ranking" ? "active" : ""}`}
@@ -214,6 +225,8 @@ function App() {
       )}
 
       {tab === "pool" && <PoolView events={events} user={user} />}
+
+      {tab === "friends" && <FriendsView events={events} user={user} />}
 
       {tab === "ranking" && <Leaderboard />}
 
