@@ -91,7 +91,12 @@ public class OAuthController {
                         + "?client_id=" + enc(facebookClientId)
                         + "&redirect_uri=" + enc(redirectUri)
                         + "&response_type=code"
-                        + "&scope=" + enc("email,public_profile")
+                        // Only request permissions the app is guaranteed to have.
+                        // "email" must be explicitly enabled in the Facebook app
+                        // (App Review), otherwise the login dialog rejects it as an
+                        // "Invalid Scopes" error. public_profile (id + name) is always
+                        // available; email falls back to a synthesized address below.
+                        + "&scope=" + enc("public_profile")
                         + "&state=" + enc(state);
                 return new AuthorizeUrl(url, state);
             }
