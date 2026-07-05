@@ -1,23 +1,45 @@
-# swim
+# UBC Length Swim
 
-UBC Aquatic Centre drop-in **Length Swim** schedule (25m/50m only) — a Java backend that fetches and caches the public UBC pm-feed, and a React frontend that displays it.
+A full-stack swim tracker for the UBC Aquatic Centre — live drop-in schedule, a virtual 3D pool, social layer, and a conversational AI Swim Coach.
 
-Also includes a **Pool** tab: pick a character, browse the real schedule to pick
-a time slot and pool length, click a lane on an animated 10-lane pool to start a
-swim, then log the distance you actually swam — persisted via a Spring
-Data JPA + H2 backend. A **My Records** tab then shows your swim history (total
-swims, distance, longest swim) in a card grid styled with an interactive,
-cursor-reactive "fluid glass" (glassmorphism) effect that runs across every
-page, not just Records.
+**Live:** [https://du8yrnvuprbic.cloudfront.net](https://du8yrnvuprbic.cloudfront.net)
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Structure](#structure)
+3. [Architecture](#architecture)
+4. [Features](#features)
+5. [Backend API](#backend-api)
+6. [Frontend](#frontend)
+7. [Agentic Layer — Swim Coach](#agentic-layer--swim-coach)
+8. [Authentication & OAuth](#authentication--oauth)
+9. [Docker](#docker)
+10. [CI/CD](#cicd)
+11. [AWS Deployment](#aws-deployment)
+12. [Notes](#notes)
+
+---
+
+## Overview
+
+UBC Length Swim ingests the public UBC `pm-feed` schedule, filters it to drop-in 25m/50m Length Swim sessions, and presents a full swim-logging experience: pick a character, choose a lane in an animated 10-lane 3D pool, log the distance you swam, and review your history in a glassmorphism "My Records" dashboard. A social layer lets you find friends, chat, watch them appear live in the pool, and send swim-together invites. A conversational **Swim Coach** agent on top of all of it answers questions and orchestrates multi-step actions in plain English over streaming SSE.
+
+---
 
 ## Structure
 
 ```
 swim/
-├── backend/   Spring Boot (Java 17, Maven) — schedule API + swim-record API (H2)
-├── frontend/  Vite + React + TypeScript
-└── infra/     AWS (S3 + CloudFront + EC2) deployment setup notes
+├── backend/   Spring Boot (Java 17, Maven) — schedule + swim-record + social + agent APIs
+├── frontend/  Vite + React 19 + TypeScript
+├── infra/     AWS setup notes, IAM policy, agent architecture doc
+└── docs/      Additional project documentation
 ```
+
+---
 
 ## Architecture
 
@@ -29,7 +51,7 @@ swim/
         ┌─────────────────┼──────────────────┐
         ▼                 ▼                  ▼
  mvn package        npm build/lint     docker build+push
- (backend)          (frontend)         (GHCR: backend + frontend images)
+ (backend)          (frontend)         (GHCR: backend image)
                           │                  │
                           │      ┌───────────┴────────────┐
                           │      ▼                         ▼
@@ -46,29 +68,34 @@ swim/
                           │                             proxy, HTTPS → :8080)
 ```
 
-- **Backend**: containerized with Docker, deployed to a single **EC2**
-  instance (Elastic IP, Amazon Linux 2023). The container always listens on
-  `:8080`; deploys happen with no SSH and no stored AWS keys — GitHub
-  Actions assumes an OIDC role and pushes the new container via **AWS
-  Systems Manager (SSM RunCommand)**.
-- **Backend reverse proxy**: a second **CloudFront distribution** sits in
-  front of the EC2 instance as a TLS-terminating reverse proxy — it's a
-  "custom origin" pointed at `<ec2-host>:8080` (HTTP only, no cert/domain
-  needed on the EC2 side). This exists because the frontend is served over
-  HTTPS and browsers block a HTTPS page from calling a plain `http://`
-  backend ("mixed content"); CloudFront gives the backend a free HTTPS front
-  door without standing up nginx/Let's Encrypt or owning a domain.
-- **Frontend**: built as a static bundle and deployed to **S3 + CloudFront**
-  (a separate, first CloudFront distribution) rather than run as a
-  long-lived server — see `infra/AWS_SETUP.md` for the one-time AWS setup
-  (OIDC role, bucket, distribution) and the reasoning.
-- **CI/CD**: `.github/workflows/ci-cd.yml` builds and lints both apps on
-  every push/PR, then (on `main`) builds + pushes Docker images to GHCR,
-  redeploys the backend container on EC2 via SSM, and deploys the frontend
-  to S3 with a CloudFront invalidation — all in one pipeline, no manual
-  steps.
+**Backend** — containerized with Docker, deployed to a single EC2 instance (Elastic IP, Amazon Linux 2023). Deploys happen via **AWS SSM RunCommand** with no SSH and no stored AWS keys — GitHub Actions assumes an OIDC role.
 
-## Backend
+**Backend reverse proxy** — a second CloudFront distribution sits in front of EC2 as a TLS-terminating reverse proxy (`custom origin → EC2:8080`). This gives the backend a free HTTPS front door without nginx or a domain name, which is necessary because browsers block mixed-content requests from an HTTPS page to a plain HTTP backend.
+
+**Frontend** — built as a static bundle deployed to S3 + CloudFront. See [`infra/AWS_SETUP.md`](infra/AWS_SETUP.md) for the one-time setup.
+
+**CI/CD** — `.github/workflows/ci-cd.yml` runs on every push/PR, deploying to production on pushes to `master`.
+
+---
+
+## Features
+
+| Tab | What it does |
+|-----|-------------|
+| **Schedule** | Live UBC drop-in schedule (25m/50m), grouped by day with filter chips and direct booking links |
+| **Pool** | Animated 3D natatorium — pick a character, select a lane, log your swim distance |
+| **Friends** | Search swimmers, send/accept friend requests, open a friend's profile, chat, send swim-together invites |
+| **Ranking** | Daily leaderboard — ranked by total distance swum that day |
+| **My Records** | Your personal swim history (distance, streak, longest swim) in a glassmorphism card grid |
+| **Coach** | Conversational AI agent — ask anything about your swims in natural language |
+
+**Character Studio** — the Pool tab's character picker includes a pose selector (Stand / Swim / Climb), a size slider, and a motion toggle. Characters without a 3D model fall back to the 2D `SwimmerAvatar` SVG component and are tagged "2D only".
+
+**Real-time** — one auto-reconnecting WebSocket per session delivers chat messages, notifications, invite updates and pool presence the instant they happen. REST polling runs in the background as a fallback.
+
+---
+
+## Backend API
 
 Requires JDK 17+ and Maven.
 
@@ -77,46 +104,53 @@ cd backend
 mvn spring-boot:run
 ```
 
-Runs on `https://d1q6dtl87ueyeb.cloudfront.net` (always — in production this port is never
-exposed directly to the internet; the CloudFront reverse proxy described
-above is what the browser actually talks to). Endpoints:
+Runs locally on `:8080`. In production, the backend is accessed via `https://d1q6dtl87ueyeb.cloudfront.net`.
 
-- `GET /api/schedule` — cached schedule (refetches from UBC if the cache, default 10 min, is stale)
-- `POST /api/schedule/refresh` — force a fresh fetch from UBC
-- `GET /api/health` — health check
-- `GET /api/swim-records` — the signed-in user's swim history, most recent first (powers the **My Records** tab)
-- `GET /api/swim-records/occupied-lanes` — lanes (1–10) currently in use
-- `POST /api/swim-records` — start a swim (character, pool length, optional lane)
-- `PATCH /api/swim-records/{id}` — finish a swim, recording the distance actually swum
-- `DELETE /api/swim-records/{id}` — delete a record
+### Schedule
 
-Social layer (all require a bearer token):
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/schedule` | Cached schedule (refetches from UBC if stale, default 10 min) |
+| `POST` | `/api/schedule/refresh` | Force a fresh fetch from UBC |
+| `GET` | `/api/health` | Health check |
 
-- `GET /api/friends` — accepted friends with live presence (`inPool`, `lane`, `poolLength` while they have an active swim)
-- `GET /api/friends/search?q=` — find people by name/email (annotated with the current relationship)
-- `GET/POST /api/friends/requests`, `POST /api/friends/requests/{id}/accept|decline`, `DELETE /api/friends/{userId}` — Instagram-style friend graph
-- `GET /api/friends/{userId}/records` — a friend's swim history (friends only)
-- `GET/POST /api/messages/{friendId}`, `GET /api/messages/unread` — direct messages between friends
-- `GET/POST /api/invites`, `POST /api/invites/{id}/accept|decline` — "swim together" invites tied to a real schedule session; accepting notifies **both** users
-- `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/read-all` — in-app notification feed (header bell)
-- `WS /ws` — real-time push channel (`PushService`). The client sends
-  `{"token": "<bearer token>"}` as its first frame (first-message auth keeps
-  tokens out of URLs/access logs); the server then pushes
-  `notification` / `message` / `social` / `presence` events the moment they
-  happen — new DMs land in open chat windows instantly, the bell badge bumps
-  live, and friends appear in the 3D pool the second they start a swim. REST
-  stays the source of truth; the frontend keeps slow (20–60s) polling as a
-  safety net, so a dropped socket degrades gracefully instead of breaking.
+### Swim Records (requires bearer token)
 
-The backend fetches 7 daily windows from `recreation.ubc.ca/pm-feed` concurrently, filters to only `Drop-in - 25m Length Swim` / `Drop-in - 50m Length Swim` sessions (excluding Aqua Fitness, Community Swim, Sensory-Sensitive, and 2STNB swims), and caches the merged result in memory.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/swim-records` | Signed-in user's swim history, most recent first |
+| `GET` | `/api/swim-records/occupied-lanes` | Lanes (1–10) currently in use |
+| `POST` | `/api/swim-records` | Start a swim (character, pool length, optional lane) |
+| `PATCH` | `/api/swim-records/{id}` | Finish a swim (record distance) |
+| `DELETE` | `/api/swim-records/{id}` | Delete a record |
 
-Config lives in `backend/src/main/resources/application.properties` — notably
-`app.cors.allowed-origins` (who's allowed to call the API) and
-`app.schedule.cache-minutes`. CORS (`CorsConfig.java`) allows
-`GET, POST, PATCH, PUT, DELETE` on `/api/**` — the wider method list (beyond
-just `GET, POST`) exists because the swim-records API uses `PATCH` to finish
-a swim, and browsers preflight that with an `OPTIONS` request that must also
-pass CORS.
+### Social (requires bearer token)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/friends` | Accepted friends with live presence (`inPool`, `lane`, `poolLength`) |
+| `GET` | `/api/friends/search?q=` | Find people by name/email |
+| `GET/POST` | `/api/friends/requests` | Send / list friend requests |
+| `POST` | `/api/friends/requests/{id}/accept\|decline` | Accept or decline a request |
+| `DELETE` | `/api/friends/{userId}` | Remove a friend |
+| `GET` | `/api/friends/{userId}/records` | A friend's swim history (friends only) |
+| `GET/POST` | `/api/messages/{friendId}` | Read / send direct messages |
+| `GET` | `/api/messages/unread` | Unread message count |
+| `GET/POST` | `/api/invites` | Create / list swim-together invites |
+| `POST` | `/api/invites/{id}/accept\|decline` | Accept or decline an invite |
+| `GET` | `/api/notifications` | In-app notification feed |
+| `GET` | `/api/notifications/unread-count` | Bell badge count |
+| `POST` | `/api/notifications/read-all` | Mark all as read |
+| `WS` | `/ws` | Real-time push channel (first-message bearer auth) |
+
+### Agent
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/agent/status` | Whether the Coach is enabled |
+| `POST` | `/api/agent/chat` | Streaming SSE chat endpoint (conversational Coach) |
+
+---
 
 ## Frontend
 
@@ -128,64 +162,177 @@ npm install
 npm run dev
 ```
 
-Runs on `https://du8yrnvuprbic.cloudfront.net` by default and expects the backend at `https://d1q6dtl87ueyeb.cloudfront.net` (override via `VITE_API_BASE_URL`, see `.env.example`). In production `VITE_API_BASE_URL` points at the **backend's CloudFront domain** (HTTPS), not the EC2 host/port directly — see Architecture above.
+Runs on `http://localhost:5173` by default; expects the backend at `VITE_API_BASE_URL` (see `.env.example`). In production this points at the backend's CloudFront HTTPS domain.
 
-Features: sessions grouped by day, 25m/50m/all filter chips, manual refresh button, booking links straight to UBC's registration page, a Pool flow to log swims, and a My Records tab to review swim history. The whole UI uses a glassmorphism "fluid glass" treatment — frosted, blurred cards plus a pointer-reactive light trail (`FluidCursor`) that follows the cursor/finger across every page — over a dark, cinematic "Deep Water" theme (`src/theme.css`): a deep-navy backdrop with slowly drifting aurora light blobs, bold Sora display type, and micro-interactions on every control.
+The UI uses a glassmorphism "fluid glass" treatment — frosted blurred cards, a pointer-reactive light trail (`FluidCursor`), and a cinematic "Deep Water" dark theme (`src/theme.css`): deep-navy backdrop, drifting aurora light blobs, Sora display type, micro-interactions on every control.
 
-The 3D Pool scene (`Pool3D.tsx`) is a virtual UBC Aquatic Centre: the pool sits inside a natatorium shell with glass curtain walls and mullions, a wood-soffit roof band with skylight, exposed steel roof trusses, concrete columns, spectator bleachers, backstroke-flag lines, wall signage and a pace clock. The walls and roof are rendered front-side-only "dollhouse" style, so the orbit camera always sees into the hall. The water surface is a live vertex-animated ripple mesh.
+The **3D Pool** (`Pool3D.tsx`) is a virtual UBC Aquatic Centre: glass curtain walls, a wood-soffit roof with skylight, exposed steel roof trusses, concrete columns, spectator bleachers, backstroke-flag lines, wall signage, pace clock, and a live vertex-animated ripple water surface. The scene is rendered dollhouse-style (front-side-only walls) so the orbit camera always sees into the hall.
 
-A **Friends** tab makes the app social: search for swimmers, send/accept friend requests, open a friend's profile to browse their swim records and stats, chat with them, and send a **swim-together invite** pinned to a real session from the UBC schedule. When the friend accepts, both users are notified via the header bell, the confirmed plan appears under "Swim plans" for both — and whenever a friend has an active swim, they appear **live in the 3D pool** in their actual lane with a floating name tag (plus an "in the pool now" badge on their friend card), so you can go find them in person.
+---
 
-All of it is **real-time over WebSockets** (`src/realtime.ts` ⇄ backend `/ws`): one auto-reconnecting socket per signed-in session delivers chat messages, notifications, invite updates and pool presence the instant they happen, with slow polling kept only as a fallback.
+## Agentic Layer — Swim Coach
+
+> **Status: PROPOSAL / MVP deployed** · Author: Annie Zhang · Last updated: July 5, 2026
+
+### Context & Objectives
+
+The Swim Coach agent adds a conversational, autonomous layer on top of the existing full-stack application without rewriting any core services. It turns click-driven actions into a natural-language interface. The guiding design principle is:
+
+> **The agent gets no new powers — it orchestrates the tools you already have.**
+
+Every capability is a thin wrapper over existing domain services (`UbcFeedService`, `SwimRecordRepository`, leaderboard logic, user profile). The agent is entirely isolated in `com.annie.swim.agent`, gated behind `app.agent.enabled=false` so the app compiles and deploys cleanly without it.
+
+### System Architecture
+
+```
+[ React SPA (Vite + TypeScript) ]
+    │   ▲
+    │   │  SSE token stream / structured cards
+    ▼   │
+[ Spring Boot REST API Backend ]
+    │
+    ├──> [ AgentController  POST /api/agent/chat ]
+    │       │
+    │       ├──> [ AgentOrchestrator ]
+    │       │       │
+    │       │       ├──> [ Guardrails & Validation ]
+    │       │       └──> [ Tool / Skill Registry ]
+    │       │               │
+    │       │               └──> Core Services:
+    │       │                    UbcFeedService, SwimRecordRepository, …
+    │       │
+    │       └──> [ Anthropic Claude API (LlmClient) ]
+    │
+    └──> [ H2 / JPA Database ]
+```
+
+**Components:**
+
+- **AgentController** (`POST /api/agent/chat`) — exposes the execution endpoint and establishes an SSE pipeline to stream partial tokens and interactive structured cards to the frontend.
+- **AgentOrchestrator** — manages the Perceive → Reason → Act → Observe lifecycle loop.
+- **Tool/Skill Registry** — auto-discovers Spring beans implementing the `Skill` interface, compiling JSON schemas to pass to the LLM for tool selection.
+- **Router / Sub-agents** — classifies user intent and delegates to specialized sub-agent layers (Coach, Analyst, Scheduler) to keep system prompts small and reasoning deterministic.
+
+### Skill Interface
+
+Every capability registered with the agent implements:
+
+```java
+public interface Skill {
+    String name();            // e.g. "schedule.find_sessions"
+    String description();     // Fed directly to the LLM for tool selection
+    JsonSchema parameterSchema();   // Validated before execute() runs
+    SkillResult execute(SkillContext ctx, JsonNode args);
+}
+```
+
+Currently deployed skills: `ScheduleSkill` (find sessions by pool / time / day), `ProgressSkill` (personal swim stats and streaks).
+
+### Data Model
+
+Four tables support conversational history, background execution, and observability:
+
+| Table | Purpose |
+|-------|---------|
+| `conversation` | Chat threads mapped to a `userId` |
+| `conversation_message` | Individual turns (user messages, assistant text) |
+| `agent_step` | Audit log: tool calls, arguments, observations, token usage, latency |
+| `scheduled_agent` | Background cron configs for user subscriptions (e.g. weekly briefings) |
+
+### Cross-Cutting Concerns
+
+**Scalability** — Tool execution results are cached within a single conversational turn. A hard-capped step budget prevents runaway tool-call loops.
+
+**Reliability** — A validation filter wraps every execution step, checking LLM-produced arguments against the skill's registered JSON schema before any code runs. Safety boundaries handle content filtering, domain verification, and age-aware advice restrictions.
+
+**Observability** — The `agent_step` table captures and replays broken execution flows deterministically. Frontend type safety is enforced with `tseslint.configs.strictTypeChecked` across all `*.{ts,tsx}` files.
+
+**Feature flag** — Set `app.agent.enabled=false` to unload the entire agent package. The core React tabs continue over Vite with HMR, with no dependency on any LLM endpoint.
+
+### Alternatives Considered
+
+**Frontend-only agent (Next.js edge / React)** — Rejected: exposes DB schemas, system prompts, and API credentials to the public client; prevents background cron jobs when the browser is closed.
+
+**Single master system prompt (no sub-agents)** — Rejected: token consumption grows with the tool registry, degrading reasoning quality and increasing hallucination rate. The Orchestrator/Router pattern partitions prompts and toolsets into isolated sub-agent scopes.
+
+### Roadmap
+
+| Phase | Scope |
+|-------|-------|
+| **Phase 1 — MVP** | Single-agent backend, `ScheduleSkill` + `ProgressSkill`, streaming Coach tab in React |
+| **Phase 2 — v2** | Orchestrator/Router with sub-agent boundaries, `WorkoutSkill`, `@Scheduled` background briefing |
+| **Phase 3 — v3** | Expose the tool registry as an **MCP server** adapter — making internal app tools consumable by external clients (Claude Desktop, Cursor, etc.) |
+
+**Rollback** — Toggle `app.agent.enabled=false` in `application.properties` (or the Docker env var `APP_AGENT_ENABLED=false`). The rest of the app is unaffected.
+
+---
+
+## Authentication & OAuth
+
+Email/password accounts are supported out of the box. Third-party login is available via:
+
+- **Google** — requires `APP_OAUTH_GOOGLE_CLIENT_ID` + `APP_OAUTH_GOOGLE_CLIENT_SECRET` environment variables (set as GitHub Secrets for CI/CD)
+- **Facebook** — requires `APP_OAUTH_FACEBOOK_CLIENT_ID` + `APP_OAUTH_FACEBOOK_CLIENT_SECRET`; redirect URI must be registered in the Meta Developer Console as `https://d1q6dtl87ueyeb.cloudfront.net/api/auth/oauth/facebook/callback`
+
+Both providers redirect back to `/api/auth/oauth/{provider}/callback`, which exchanges the code for a profile, mints a local bearer token, and bounces the browser to the SPA via a URL hash fragment (`#token=…`).
+
+Tokens are stored in `localStorage` as `swim.token` and sent as `Authorization: Bearer <token>` on every authenticated request. Social login is 501 Not Implemented when the corresponding client-id env var is blank.
+
+---
 
 ## Docker
 
-Run both apps with one command (builds images locally, persists the H2 file
-under `backend/data/`):
+Run both apps with one command (builds images locally, persists the H2 file under `backend/data/`):
 
 ```bash
 docker compose up --build
 ```
 
-Backend at `https://d1q6dtl87ueyeb.cloudfront.net`, frontend at `https://du8yrnvuprbic.cloudfront.net`.
 Each app also has its own standalone `Dockerfile` if you only need one.
+
+---
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` runs on every push/PR to `main`:
+`.github/workflows/ci-cd.yml` runs on every push/PR to `master`:
 
 1. **backend-build** — `mvn package` (JDK 17)
-2. **frontend-build** — `npm ci`, lint, type-check, `npm run build`, uploads
-   `dist/` as an artifact
-3. **docker-publish** (main only) — builds both Dockerfiles, pushes to
-   `ghcr.io/<owner>/<repo>/swim-backend` and `swim-frontend`
-4. **deploy-backend-ec2** (main only) — assumes the OIDC role, then uses
-   `aws ssm send-command` to tell the EC2 instance to `docker pull` the new
-   backend image and restart the container (no SSH, no stored keys; the
-   data directory's permissions are reset on every deploy to avoid an H2
-   file-lock crash loop)
-5. **deploy-frontend-s3** (main only) — syncs the built frontend to S3 and
-   invalidates the frontend's CloudFront distribution, authenticating via
-   the same OIDC role
+2. **frontend-build** — `npm ci`, lint, type-check, `npm run build`, uploads `dist/` as an artifact
+3. **docker-publish-backend** (master only) — builds the backend Dockerfile, pushes to `ghcr.io/<owner>/<repo>/swim-backend`
+4. **deploy-backend-ec2** (master only) — assumes the OIDC role, uses `aws ssm send-command` to pull and restart the container on EC2 (no SSH, no stored keys; data directory permissions reset on each deploy)
+5. **deploy-frontend-s3** (master only) — syncs the built frontend to S3 and invalidates the frontend's CloudFront distribution
 
-## AWS deployment
+The `master` branch is protected — all changes require a PR with 2 passing CI checks before merging.
 
-The frontend deploys as a static site to **S3 + CloudFront**. The backend
-runs as a Docker container on a single **EC2** instance, fronted by a
-*second*, independent CloudFront distribution acting purely as a TLS
-reverse proxy (custom HTTP origin → EC2:8080, no caching) so the backend
-gets HTTPS without a domain or a reverse-proxy server of its own. See
-[`infra/AWS_SETUP.md`](infra/AWS_SETUP.md) for the one-time setup (bucket,
-both distributions, EC2 instance + IAM instance profile, IAM OIDC role,
-required GitHub secrets/variables) and the design reasoning.
+**Required GitHub Secrets / Variables:**
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `AWS_DEPLOY_ROLE_ARN` | Secret | OIDC role for S3 + SSM access |
+| `AWS_REGION` | Secret | e.g. `us-east-1` |
+| `EC2_INSTANCE_ID` | Secret | Target EC2 instance |
+| `S3_BUCKET` | Secret | Frontend S3 bucket name |
+| `CLOUDFRONT_DISTRIBUTION_ID` | Secret | Frontend CloudFront distribution |
+| `GOOGLE_CLIENT_ID` | Secret | Google OAuth |
+| `GOOGLE_CLIENT_SECRET` | Secret | Google OAuth |
+| `FACEBOOK_CLIENT_ID` | Secret | Facebook OAuth |
+| `FACEBOOK_CLIENT_SECRET` | Secret | Facebook OAuth |
+| `FRONTEND_ORIGIN` | Variable | e.g. `https://du8yrnvuprbic.cloudfront.net` |
+| `VITE_API_BASE_URL` | Variable | e.g. `https://d1q6dtl87ueyeb.cloudfront.net` |
+
+---
+
+## AWS Deployment
+
+The frontend deploys as a static site to **S3 + CloudFront**. The backend runs as a Docker container on a single **EC2** instance, fronted by a second, independent CloudFront distribution acting purely as a TLS reverse proxy (custom HTTP origin → EC2:8080, no caching) so the backend gets HTTPS without a domain or a reverse-proxy server.
+
+See [`infra/AWS_SETUP.md`](infra/AWS_SETUP.md) for the one-time setup (bucket, both distributions, EC2 instance + IAM instance profile, IAM OIDC role, required GitHub secrets/variables) and the design reasoning.
+
+---
 
 ## Notes
 
-- Both apps are independent — no shared build step. Run them in two terminals
-  (or via `docker compose up`).
-- For production, `VITE_API_BASE_URL` (GitHub Actions variable) points at the
-  backend's CloudFront HTTPS domain, and `app.cors.allowed-origins` (passed
-  to the backend container as `APP_CORS_ALLOWED_ORIGINS`, via the
-  `FRONTEND_ORIGIN` GitHub Actions variable) is set to the frontend's
-  CloudFront HTTPS domain — each side's "origin" is the *other* CloudFront
-  distribution's domain, not a raw IP/port.
+- Both apps are independent — no shared build step. Run them in two terminals or via `docker compose up`.
+- For production, `VITE_API_BASE_URL` points at the backend's CloudFront HTTPS domain, and `APP_CORS_ALLOWED_ORIGINS` is set to the frontend's CloudFront HTTPS domain — each side's "origin" is the other distribution's domain, not a raw IP/port.
+- The H2 database persists to `/app/data/swim.mv.db` inside the container, mounted from `/home/ec2-user/swim-data` on the EC2 host.
+- VS Code users: select "Use Workspace Version" for TypeScript (Cmd+Shift+P → "TypeScript: Select TypeScript Version") to avoid false tsconfig errors from the built-in older TypeScript version.
