@@ -17,11 +17,12 @@ import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
 import AuthScreen from "./components/AuthScreen";
 import SwimSchool from "./components/SwimSchool";
+import CoachView from "./components/CoachView";
 import SwimmerAvatar from "./components/SwimmerAvatar";
 import type { Character } from "./data/characters";
 import type { PoolFilter, SwimEvent, User } from "./types";
 
-type Tab = "schedule" | "pool" | "records" | "ranking";
+type Tab = "schedule" | "pool" | "records" | "ranking" | "coach";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
@@ -178,6 +179,9 @@ function App() {
         >
           My Records
         </button>
+        <button className={`tab ${tab === "coach" ? "active" : ""}`} onClick={() => setTab("coach")}>
+          Coach
+        </button>
       </div>
 
       {tab === "schedule" && (
@@ -218,6 +222,8 @@ function App() {
       {tab === "ranking" && <Leaderboard />}
 
       {tab === "records" && <RecordsView />}
+
+      {tab === "coach" && <CoachView />}
     </div>
   );
 }

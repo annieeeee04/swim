@@ -206,6 +206,104 @@ export async function fetchOAuthUrl(provider: "google" | "facebook"): Promise<st
   return data.authorizeUrl;
 }
 
+// ===================== Swim Coach agent =====================
+
+export interface CoachStep {
+  tool: string;
+  summary: string;
+  latencyMs?: number;
+}
+
+export interface CoachStreamHandlers {
+  onStep?: (step: CoachStep) => void;
+  onMessage?: (text: string) => void;
+  onError?: (message: string) => void;
+  onDone?: (conversationId: number | null) => void;
+}
+
+/** True if the backend has the Coach agent feature flag turned on. */
+export async function fetchCoachStatus(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/agent/status`);
+    if (!res.ok) return false;
+    const data: { enabled: boolean } = await res.json();
+    return !!data.enabled;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends one Coach chat turn and consumes the SSE stream from the POST
+ * response body (EventSource only supports GET, so we parse it ourselves).
+ */
+export async function streamCoachChat(
+  message: string,
+  conversationId: number | null,
+  handlers: CoachStreamHandlers,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/agent/chat`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json", Accept: "text/event-stream" }),
+    body: JSON.stringify({ message, conversationId }),
+  });
+  if (!res.ok || !res.body) {
+    if (res.status === 503) {
+      handlers.onError?.("The Coach isn't enabled on this server yet.");
+      return;
+    }
+    await failure(res, "The Coach couldn't answer right now.");
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const dispatch = (eventName: string, dataRaw: string) => {
+    let data: unknown;
+    try {
+      data = JSON.parse(dataRaw);
+    } catch {
+      return;
+    }
+    const d = data as Record<string, unknown>;
+    if (eventName === "step") {
+      handlers.onStep?.({
+        tool: String(d.tool ?? ""),
+        summary: String(d.summary ?? ""),
+        latencyMs: typeof d.latencyMs === "number" ? d.latencyMs : undefined,
+      });
+    } else if (eventName === "message") {
+      handlers.onMessage?.(String(d.text ?? ""));
+    } else if (eventName === "error") {
+      handlers.onError?.(String(d.message ?? "Something went wrong."));
+    } else if (eventName === "done") {
+      handlers.onDone?.(typeof d.conversationId === "number" ? d.conversationId : null);
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE frames are separated by a blank line.
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let eventName = "message";
+      const dataLines: string[] = [];
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (dataLines.length > 0) dispatch(eventName, dataLines.join("\n"));
+    }
+  }
+}
+
 // ===================== leaderboard =====================
 
 export async function fetchTodayLeaderboard(): Promise<LeaderboardEntry[]> {

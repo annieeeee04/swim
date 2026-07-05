@@ -1,0 +1,197 @@
+/* Coach tab: chat panel over the agent SSE endpoint. */
+
+.coach {
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  padding: 14px;
+  min-height: 60vh;
+  max-height: 72vh;
+}
+
+.coach-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 4px 12px;
+}
+
+.coach-welcome {
+  margin: auto;
+  text-align: center;
+  opacity: 0.92;
+}
+
+.coach-welcome-emoji {
+  font-size: 2.4rem;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.coach-welcome h2 {
+  margin: 0 0 4px;
+}
+
+.coach-welcome p {
+  margin: 0 0 14px;
+  opacity: 0.75;
+}
+
+.coach-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.coach-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coach-msg-user {
+  align-items: flex-end;
+}
+
+.coach-msg-assistant {
+  align-items: flex-start;
+}
+
+.coach-bubble {
+  max-width: min(560px, 85%);
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 2px 10px rgba(15, 60, 110, 0.08);
+}
+
+.coach-msg-user .coach-bubble {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.coach-msg-assistant .coach-bubble {
+  border-bottom-left-radius: 4px;
+}
+
+.coach-bubble-error {
+  background: rgba(254, 226, 226, 0.9);
+  color: #991b1b;
+}
+
+/* Streamed tool steps ("found 3 slots…") above the final answer. */
+.coach-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.coach-step-tool {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* Typing indicator while the agent works. */
+.coach-thinking {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.coach-thinking span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(30, 64, 175, 0.5);
+  animation: coach-bounce 1.2s infinite ease-in-out;
+}
+
+.coach-thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.coach-thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes coach-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+.coach-input-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.coach-input {
+  flex: 1;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  outline: none;
+}
+
+.coach-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.coach-send {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  cursor: pointer;
+}
+
+.coach-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Feature-flag-off state */
+.coach-disabled {
+  border-radius: 18px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.coach-disabled-emoji {
+  font-size: 2.4rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.coach-disabled code {
+  background: rgba(148, 163, 184, 0.2);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
