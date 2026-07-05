@@ -27,7 +27,7 @@ import SwimmerAvatar from "./components/SwimmerAvatar";
 import type { Character } from "./data/characters";
 import type { PoolFilter, SwimEvent, User } from "./types";
 
-type Tab = "schedule" | "pool" | "records" | "ranking" | "coach";
+type Tab = "schedule" | "pool" | "friends" | "records" | "ranking" | "coach";
 
 const FILTERS: { value: PoolFilter; label: string }[] = [
   { value: "all", label: "All Pools" },
