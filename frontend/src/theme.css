@@ -1,0 +1,220 @@
+/*
+ * "Deep Water" theme — the modern, lusion.co-inspired look.
+ *
+ * The page becomes a dark, cinematic pool hall: a deep navy backdrop with
+ * slowly drifting aurora light-blobs (like light refracting through water),
+ * while every card stays bright frosted glass floating on top of it. This
+ * file is imported LAST in App.tsx, so its overrides win against the
+ * per-component stylesheets.
+ */
+
+:root {
+  --font-display: "Sora", "Quicksand", "Nunito", sans-serif;
+
+  /* on-dark-background text (cards keep the original dark ink) */
+  --on-bg-ink: #eef2ff;
+  --on-bg-muted: #a7b1d6;
+
+  --shadow-card: 0 14px 40px rgba(4, 6, 22, 0.45), 0 1px 3px rgba(4, 6, 22, 0.3);
+  --shadow-lift: 0 18px 44px rgba(124, 58, 237, 0.35);
+}
+
+/* ---------- backdrop: deep water + drifting aurora ---------- */
+
+body {
+  background:
+    radial-gradient(1100px 700px at 85% -10%, rgba(56, 189, 248, 0.16), transparent 60%),
+    radial-gradient(900px 700px at -10% 40%, rgba(168, 85, 247, 0.17), transparent 62%),
+    radial-gradient(1000px 800px at 60% 115%, rgba(236, 72, 153, 0.13), transparent 60%),
+    linear-gradient(165deg, #0a0d24 0%, #0b1030 46%, #081226 100%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* two extra light-blobs that slowly swim across the page */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+body::before {
+  width: 560px;
+  height: 560px;
+  top: -180px;
+  left: -140px;
+  background: radial-gradient(circle at 30% 30%, rgba(34, 211, 238, 0.28), transparent 68%);
+  animation: aurora-drift-a 26s ease-in-out infinite alternate;
+}
+
+body::after {
+  width: 640px;
+  height: 640px;
+  bottom: -220px;
+  right: -160px;
+  background: radial-gradient(circle at 70% 70%, rgba(168, 85, 247, 0.26), transparent 68%);
+  animation: aurora-drift-b 32s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-a {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(140px, 90px) scale(1.15); }
+}
+
+@keyframes aurora-drift-b {
+  from { transform: translate(0, 0) scale(1.1); }
+  to { transform: translate(-160px, -110px) scale(0.95); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+  }
+}
+
+/* ---------- glass cards: brighter frost so dark ink stays readable ---------- */
+
+.glass-surface {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* the header must stack above the tabs bar so the bell dropdown isn't cut */
+.app-header {
+  position: relative;
+  z-index: 70;
+}
+
+/* ---------- typography: bold modern display headings ---------- */
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+.brand h1 {
+  font-weight: 800;
+}
+
+/* text that sits directly on the dark backdrop (not inside a glass card) */
+.updated-at,
+.empty-state,
+.app-booting,
+.pool-meta,
+.pool3d-loading,
+.stage-hint,
+.slot-day-heading,
+.day-heading,
+.picker-step > h2,
+.picker-step h2 {
+  color: var(--on-bg-ink);
+}
+
+.updated-at,
+.pool-meta,
+.slot-day-heading {
+  color: var(--on-bg-muted);
+}
+
+.error-state,
+.pool-error {
+  color: #fda4af;
+}
+
+.pool-friends-note {
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.intro-title {
+  font-family: var(--font-display);
+  color: var(--on-bg-ink);
+}
+
+.intro-desc {
+  color: var(--on-bg-muted);
+}
+
+.intro-desc strong {
+  color: var(--on-bg-ink);
+}
+
+/* ---------- micro-interactions: everything responds to the cursor ---------- */
+
+.tab,
+.chip,
+.refresh-button,
+.slot-button,
+.length-button,
+.character-card,
+.session,
+.friend-row,
+.invite-slot-btn {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+  will-change: transform;
+}
+
+.tab:hover,
+.chip:hover,
+.refresh-button:hover:not(:disabled),
+.slot-button:hover {
+  transform: translateY(-2px);
+}
+
+.length-button:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-lift);
+}
+
+.character-card:hover {
+  transform: translateY(-4px) rotate(-0.4deg);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.8);
+  outline-offset: 2px;
+}
+
+/* ---------- 3D pool stage: give the canvas a cinematic frame ---------- */
+
+.pool-stage,
+.aquatic-stage {
+  border-radius: var(--radius-hero);
+  overflow: hidden;
+  box-shadow:
+    0 30px 80px rgba(3, 5, 20, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- slim modern scrollbars ---------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.45) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.4);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

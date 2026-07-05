@@ -1,7 +1,14 @@
 import type {
+  AppNotification,
   AuthResponse,
+  ChatMessage,
+  FriendRequest,
+  FriendRequests,
+  FriendSearchHit,
+  FriendView,
   LeaderboardEntry,
   ScheduleResponse,
+  SwimInvite,
   SwimRecord,
   User,
 } from "./types";

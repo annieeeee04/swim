@@ -7,12 +7,17 @@ import "./components/IntroPage.css";
 import "./components/AquaticCenterSchedule.css";
 import "./components/AuthScreen.css";
 import "./components/Leaderboard.css";
-import { fetchSchedule, refreshSchedule } from "./api";
+import "./components/FriendsView.css";
+import "./theme.css";
+import { fetchSchedule, getAuthToken, refreshSchedule } from "./api";
+import { connectRealtime, disconnectRealtime } from "./realtime";
 import { useAuth } from "./auth/AuthContext";
 import PoolView from "./components/PoolView";
 import AquaticCenterSchedule from "./components/AquaticCenterSchedule";
 import RecordsView from "./components/RecordsView";
 import Leaderboard from "./components/Leaderboard";
+import FriendsView from "./components/FriendsView";
+import NotificationBell from "./components/NotificationBell";
 import FluidCursor from "./components/FluidCursor";
 import IntroPage from "./components/IntroPage";
 import AuthScreen from "./components/AuthScreen";
@@ -95,6 +100,16 @@ function App() {
     if (user && !started) setStarted(true);
   }, [user, started]);
 
+  // Live push channel: one WebSocket per signed-in session, carrying friend
+  // presence, chat messages, invites and notifications in real time.
+  useEffect(() => {
+    if (!user) return;
+    const token = getAuthToken();
+    if (!token) return;
+    connectRealtime(token);
+    return () => disconnectRealtime();
+  }, [user]);
+
   if (!started) {
     return (
       <>
@@ -143,6 +158,7 @@ function App() {
         </div>
 
         <div className="user-chip">
+          <NotificationBell onGoToFriends={() => setTab("friends")} />
           <span className="user-chip-avatar">
             {user.photoUrl ? (
               <img src={user.photoUrl} alt="" />
@@ -166,6 +182,12 @@ function App() {
         </button>
         <button className={`tab ${tab === "pool" ? "active" : ""}`} onClick={() => setTab("pool")}>
           Pool
+        </button>
+        <button
+          className={`tab ${tab === "friends" ? "active" : ""}`}
+          onClick={() => setTab("friends")}
+        >
+          Friends
         </button>
         <button
           className={`tab ${tab === "ranking" ? "active" : ""}`}
@@ -218,6 +240,8 @@ function App() {
       )}
 
       {tab === "pool" && <PoolView events={events} user={user} />}
+
+      {tab === "friends" && <FriendsView events={events} user={user} />}
 
       {tab === "ranking" && <Leaderboard />}
 
