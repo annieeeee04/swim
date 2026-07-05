@@ -125,7 +125,10 @@ export default function CoachView() {
               </ul>
             )}
             {m.text ? (
-              <div className={`coach-bubble ${m.error ? "coach-bubble-error" : ""}`}>{m.text}</div>
+              <div
+                className={`coach-bubble ${m.error ? "coach-bubble-error" : ""}`}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }}
+              />
             ) : (
               m.role === "assistant" && busy && i === messages.length - 1 && (
                 <div className="coach-bubble coach-thinking">
@@ -159,6 +162,19 @@ export default function CoachView() {
       </form>
     </div>
   );
+}
+
+/** Converts a small subset of markdown to safe HTML for coach responses. */
+function renderMarkdown(text: string): string {
+  return text
+    // escape HTML first to prevent XSS
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    // **bold**
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    // *italic*
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    // newlines → <br>
+    .replace(/\n/g, "<br>");
 }
 
 function prettyTool(tool: string): string {
