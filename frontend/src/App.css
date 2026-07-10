@@ -293,3 +293,343 @@
   padding: 14px;
   font-size: 13.5px;
 }
+
+/* ================= sidebar shell (Night Lane redesign) ================= */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+  align-items: start;
+  min-height: 100svh;
+}
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-radius: 24px;
+  padding: 20px 16px 16px;
+  height: calc(100svh - 40px);
+  min-height: 560px;
+  box-shadow: var(--shadow-card);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+}
+
+.sidebar-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--grad-primary);
+  font-size: 18px;
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.35);
+}
+
+.sidebar-brand-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+
+/* profile card */
+.sidebar-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 18px 12px 14px;
+  border-radius: 18px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.25);
+  margin-bottom: 8px;
+}
+
+.sidebar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-ink);
+}
+
+.sidebar-role {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.sidebar-stats {
+  display: flex;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-stats span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.sidebar-stats span + span {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-stats em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--color-muted);
+}
+
+.sidebar-stats strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-ink);
+}
+
+/* nav */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-muted);
+  padding: 11px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-nav-item:hover {
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-nav-item.active {
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--color-accent);
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+  color: var(--color-accent);
+}
+
+.sidebar-nav-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.sidebar-nav-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* footer */
+.sidebar-foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-muted);
+  padding: 11px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-logout:hover {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.sidebar-logout svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- main column ---------- */
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px 0;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+}
+
+.page-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* the bell needs a visible chip on the dark backdrop */
+.page-head-actions .notif-bell-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 17px;
+}
+
+/* ---------- responsive: collapse to a top bar ---------- */
+
+@media (max-width: 920px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    padding: 14px 14px 40px;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    min-height: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar-profile {
+    flex-direction: row;
+    padding: 8px 12px;
+    gap: 10px;
+  }
+
+  .sidebar-avatar {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 0;
+  }
+
+  .sidebar-stats {
+    display: none;
+  }
+
+  .sidebar-role {
+    display: none;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    overflow: visible;
+  }
+
+  .sidebar-nav-item {
+    padding: 8px 12px;
+  }
+
+  .sidebar-nav-item.active::before {
+    display: none;
+  }
+
+  .sidebar-foot {
+    border-top: none;
+    padding-top: 0;
+    margin-left: auto;
+  }
+}

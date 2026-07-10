@@ -1,98 +1,91 @@
 /*
- * "Deep Water" theme — the modern, lusion.co-inspired look.
+ * "Night Lane" theme — WiseRun-inspired dark + amber look.
  *
- * The page becomes a dark, cinematic pool hall: a deep navy backdrop with
- * slowly drifting aurora light-blobs (like light refracting through water),
- * while every card stays bright frosted glass floating on top of it. This
- * file is imported LAST in App.tsx, so its overrides win against the
- * per-component stylesheets.
+ * Near-black charcoal backdrop, graphite cards, one warm amber accent used
+ * sparingly for active states and primary actions, big bold display type.
+ * This file is imported LAST in App.tsx, so its token overrides win against
+ * index.css and every per-component stylesheet.
  */
 
 :root {
+  color-scheme: dark;
   --font-display: "Sora", "Quicksand", "Nunito", sans-serif;
 
-  /* on-dark-background text (cards keep the original dark ink) */
-  --on-bg-ink: #eef2ff;
-  --on-bg-muted: #a7b1d6;
+  /* ---- flipped ink: dark cards, light text ---- */
+  --color-ink: #f4f4f1;
+  --color-muted: #9a9a92;
+  --color-accent: #fbbf24;
+  --color-accent-dark: #f59e0b;
+  --color-pink: #fbbf24; /* the old pink accent maps onto amber */
 
-  --shadow-card: 0 14px 40px rgba(4, 6, 22, 0.45), 0 1px 3px rgba(4, 6, 22, 0.3);
-  --shadow-lift: 0 18px 44px rgba(124, 58, 237, 0.35);
+  --grad-primary: linear-gradient(135deg, #fde047 0%, #f59e0b 100%);
+  --grad-bg: linear-gradient(160deg, #0d0d0c 0%, #121210 100%);
+
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 14px 34px rgba(251, 191, 36, 0.22);
+  --shadow-primary: 0 6px 18px rgba(251, 191, 36, 0.3);
+
+  /* on-dark-background text (same as card ink now) */
+  --on-bg-ink: #f4f4f1;
+  --on-bg-muted: #9a9a92;
+
+  /* surfaces */
+  --surface-card: rgba(26, 26, 24, 0.92);
+  --surface-card-border: rgba(255, 255, 255, 0.07);
+  --surface-inset: rgba(255, 255, 255, 0.05);
+  --surface-inset-strong: rgba(255, 255, 255, 0.09);
+
+  /* pool-length coding stays watery, slightly brightened for dark bg */
+  --pool-25m: #4cc4fb;
+  --pool-50m: #c084fc;
+  --pool-other: #2dd4bf;
+
+  --color-success: #4ade80;
+  --color-success-bg: rgba(74, 222, 128, 0.14);
+  --color-live: #fbbf24;
+  --color-live-bg: rgba(251, 191, 36, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.1);
+  --color-warning-border: rgba(251, 191, 36, 0.3);
+
+  /* fluid cursor hues: warm golds instead of pink/purple */
+  --fluid-pink: 253, 224, 71;
+  --fluid-purple: 245, 158, 11;
+  --fluid-blue: 251, 191, 36;
 }
 
-/* ---------- backdrop: deep water + drifting aurora ---------- */
+/* ---------- backdrop: matte charcoal with a faint amber glow ---------- */
 
 body {
   background:
-    radial-gradient(1100px 700px at 85% -10%, rgba(56, 189, 248, 0.16), transparent 60%),
-    radial-gradient(900px 700px at -10% 40%, rgba(168, 85, 247, 0.17), transparent 62%),
-    radial-gradient(1000px 800px at 60% 115%, rgba(236, 72, 153, 0.13), transparent 60%),
-    linear-gradient(165deg, #0a0d24 0%, #0b1030 46%, #081226 100%);
+    radial-gradient(1000px 640px at 88% -12%, rgba(251, 191, 36, 0.07), transparent 60%),
+    radial-gradient(900px 700px at -12% 110%, rgba(251, 191, 36, 0.05), transparent 62%),
+    linear-gradient(170deg, #0e0e0d 0%, #0a0a09 100%);
   background-attachment: fixed;
   overflow-x: hidden;
+  color: var(--color-ink);
 }
 
-/* two extra light-blobs that slowly swim across the page */
 body::before,
 body::after {
-  content: "";
-  position: fixed;
-  z-index: -1;
-  border-radius: 50%;
-  filter: blur(90px);
-  pointer-events: none;
+  content: none; /* no aurora blobs — the reference look is calm and matte */
 }
 
-body::before {
-  width: 560px;
-  height: 560px;
-  top: -180px;
-  left: -140px;
-  background: radial-gradient(circle at 30% 30%, rgba(34, 211, 238, 0.28), transparent 68%);
-  animation: aurora-drift-a 26s ease-in-out infinite alternate;
-}
-
-body::after {
-  width: 640px;
-  height: 640px;
-  bottom: -220px;
-  right: -160px;
-  background: radial-gradient(circle at 70% 70%, rgba(168, 85, 247, 0.26), transparent 68%);
-  animation: aurora-drift-b 32s ease-in-out infinite alternate;
-}
-
-@keyframes aurora-drift-a {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(140px, 90px) scale(1.15); }
-}
-
-@keyframes aurora-drift-b {
-  from { transform: translate(0, 0) scale(1.1); }
-  to { transform: translate(-160px, -110px) scale(0.95); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body::before,
-  body::after {
-    animation: none;
-  }
-}
-
-/* ---------- glass cards: brighter frost so dark ink stays readable ---------- */
+/* ---------- cards: graphite panels instead of white frost ---------- */
 
 .glass-surface {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: var(--surface-card);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  border: 1px solid var(--surface-card-border);
 }
 
-/* the header must stack above the tabs bar so the bell dropdown isn't cut */
 .app-header {
   position: relative;
   z-index: 70;
 }
 
-/* ---------- typography: bold modern display headings ---------- */
+/* ---------- typography ---------- */
 
 h1, h2, h3 {
   font-family: var(--font-display);
@@ -103,7 +96,6 @@ h1, h2, h3 {
   font-weight: 800;
 }
 
-/* text that sits directly on the dark backdrop (not inside a glass card) */
 .updated-at,
 .empty-state,
 .app-booting,
@@ -123,13 +115,18 @@ h1, h2, h3 {
   color: var(--on-bg-muted);
 }
 
-.error-state,
+.error-state {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.09);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
 .pool-error {
-  color: #fda4af;
+  color: #fca5a5;
 }
 
 .pool-friends-note {
-  color: #7dd3fc;
+  color: var(--color-accent);
   font-weight: 700;
 }
 
@@ -143,10 +140,181 @@ h1, h2, h3 {
 }
 
 .intro-desc strong {
-  color: var(--on-bg-ink);
+  color: var(--color-accent);
 }
 
-/* ---------- micro-interactions: everything responds to the cursor ---------- */
+/* ---------- amber actions carry dark ink (yellow pill, black text) ---------- */
+
+.tab.active,
+.chip.active,
+.length-button,
+.coach-send,
+.mini-btn:not(.mini-btn-ghost) {
+  color: #121212;
+}
+
+.tab.active,
+.chip.active {
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.35);
+}
+
+.mini-btn:not(.mini-btn-ghost) {
+  background: var(--grad-primary);
+  border-color: transparent;
+}
+
+.mini-btn-ghost {
+  color: var(--color-muted);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: transparent;
+}
+
+.mini-btn-ghost:hover:not(:disabled) {
+  background: var(--surface-inset);
+  color: var(--color-ink);
+}
+
+/* ---------- light inputs & rows become graphite insets ---------- */
+
+.friends-search input,
+.chat-compose input,
+.coach-input,
+.profile-add-form textarea,
+.auth-field input,
+.auth-field select {
+  background: var(--surface-inset);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-ink);
+}
+
+.friends-search input::placeholder,
+.chat-compose input::placeholder,
+.coach-input::placeholder,
+.profile-add-form textarea::placeholder {
+  color: var(--color-muted);
+}
+
+.friends-search input:focus,
+.chat-compose input:focus,
+.coach-input:focus,
+.profile-add-form textarea:focus,
+.auth-field input:focus,
+.auth-field select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18);
+}
+
+.friend-row,
+.friends-hits li,
+.friends-requests li {
+  background: var(--surface-inset);
+}
+
+.friend-row:hover {
+  background: var(--surface-inset-strong);
+}
+
+.friend-row.active {
+  border-color: var(--color-accent);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.chat-bubble.theirs {
+  background: var(--surface-inset-strong);
+  color: var(--color-ink);
+}
+
+.chat-bubble.mine {
+  background: var(--grad-primary);
+  color: #121212;
+}
+
+.coach-bubble {
+  background: var(--surface-inset-strong);
+  color: var(--color-ink);
+  box-shadow: none;
+}
+
+.coach-msg-user .coach-bubble {
+  background: var(--grad-primary);
+  color: #121212;
+}
+
+.coach-bubble-error {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.friend-stat,
+.invite-card,
+.session-length,
+.mini-tag,
+.count-pill {
+  background: var(--surface-inset);
+  color: var(--color-ink);
+}
+
+.stranger-banner {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.profile-request-box {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+.profile-request-box blockquote {
+  background: var(--surface-inset);
+  border-left-color: var(--color-accent);
+}
+
+.friend-hub-tabs {
+  background: var(--surface-inset);
+}
+
+.friend-hub-tabs button.active {
+  background: var(--grad-primary);
+  color: #121212;
+  box-shadow: 0 1px 6px rgba(251, 191, 36, 0.35);
+}
+
+.notif-panel li.unread {
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.unread-badge {
+  background: var(--grad-primary);
+  color: #121212;
+}
+
+.stranger-tag {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--color-accent);
+}
+
+.stranger-limit-alert {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+/* auth + intro on the dark backdrop */
+.auth-kicker,
+.intro-kicker {
+  color: var(--color-accent);
+}
+
+.social-btn {
+  background: var(--surface-inset);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-ink);
+}
+
+.social-btn:hover {
+  background: var(--surface-inset-strong);
+}
+
+/* ---------- micro-interactions ---------- */
 
 .tab,
 .chip,
@@ -172,6 +340,11 @@ h1, h2, h3 {
   transform: translateY(-2px);
 }
 
+.refresh-button:hover:not(:disabled) {
+  background: var(--surface-inset-strong);
+  border-color: var(--color-accent);
+}
+
 .length-button:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.02);
   box-shadow: var(--shadow-lift);
@@ -183,26 +356,26 @@ h1, h2, h3 {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid rgba(168, 85, 247, 0.8);
+  outline: 2px solid rgba(251, 191, 36, 0.8);
   outline-offset: 2px;
 }
 
-/* ---------- 3D pool stage: give the canvas a cinematic frame ---------- */
+/* ---------- 3D pool stage ---------- */
 
 .pool-stage,
 .aquatic-stage {
   border-radius: var(--radius-hero);
   overflow: hidden;
   box-shadow:
-    0 30px 80px rgba(3, 5, 20, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* ---------- slim modern scrollbars ---------- */
+/* ---------- slim scrollbars ---------- */
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(168, 85, 247, 0.45) transparent;
+  scrollbar-color: rgba(251, 191, 36, 0.4) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -211,7 +384,7 @@ input:focus-visible {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.4);
+  background: rgba(251, 191, 36, 0.35);
   border-radius: 8px;
 }
 
