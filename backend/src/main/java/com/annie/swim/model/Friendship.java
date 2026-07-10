@@ -38,6 +38,10 @@ public class Friendship {
     @Column(nullable = false)
     private String status = Status.PENDING.name();
 
+    /** Optional note the requester attached ("Hi, we swam in lane 3 together!"). */
+    @Column(length = 300)
+    private String message;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -50,6 +54,19 @@ public class Friendship {
     public Friendship(Long requesterId, Long addresseeId) {
         this.requesterId = requesterId;
         this.addresseeId = addresseeId;
+    }
+
+    public Friendship(Long requesterId, Long addresseeId, String message) {
+        this(requesterId, addresseeId);
+        this.message = message;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 
     public Long getId() {

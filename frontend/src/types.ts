@@ -81,6 +81,8 @@ export interface FriendRequest {
   id: number;
   user: UserSummary;
   createdAt: string;
+  /** Optional intro note sent along with the request. */
+  message: string | null;
 }
 
 export interface FriendRequests {
@@ -95,6 +97,33 @@ export interface ChatMessage {
   body: string;
   sentAt: string;
   readAt: string | null;
+}
+
+/** One row in the chat list: a conversation with a friend or a stranger. */
+export interface ChatListItem {
+  user: UserSummary;
+  lastBody: string;
+  lastAt: string;
+  lastFromMe: boolean;
+  unread: number;
+  friends: boolean;
+  /** Intro messages you may still send this stranger (null when friends). */
+  introRemaining: number | null;
+}
+
+/** Public profile card (ranking / search / notification click-through). */
+export interface PublicProfile {
+  user: UserSummary;
+  relation: "self" | "friends" | "requested" | "incoming" | "none";
+  incomingRequestId: number | null;
+  requestMessage: string | null;
+  inPool: boolean;
+  lane: number | null;
+  poolLength: 25 | 50 | null;
+  swims: number;
+  totalMeters: number;
+  longestMeters: number;
+  introRemaining: number | null;
 }
 
 export type InviteStatus = "PENDING" | "ACCEPTED" | "DECLINED";

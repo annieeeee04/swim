@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  fetchFriendRequests,
   fetchNotifications,
   fetchUnreadNotificationCount,
   markNotificationsRead,
@@ -36,8 +37,14 @@ function timeAgo(iso: string): string {
  */
 export default function NotificationBell({
   onGoToFriends,
+  onOpenChat,
+  onOpenProfile,
 }: {
   onGoToFriends?: () => void;
+  /** Jump straight into the chat with a user (message notifications). */
+  onOpenChat?: (userId: number) => void;
+  /** Open a user's profile card (friend-request notifications). */
+  onOpenProfile?: (userId: number) => void;
 }) {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -80,6 +87,30 @@ export default function NotificationBell({
     window.addEventListener("pointerdown", onDown);
     return () => window.removeEventListener("pointerdown", onDown);
   }, [open]);
+
+  /** Each notification is a shortcut to the thing it's about. */
+  async function handleItemClick(n: AppNotification) {
+    setOpen(false);
+    if (n.type === "MESSAGE" && n.refId != null && onOpenChat) {
+      onOpenChat(n.refId); // refId = sender id → continue that chat
+      return;
+    }
+    if (n.type === "FRIEND_REQUEST" && n.refId != null && onOpenProfile) {
+      // refId = friendship id → look up who asked, open their profile so the
+      // user can check them out before accepting.
+      try {
+        const reqs = await fetchFriendRequests();
+        const req = reqs.incoming.find((r) => r.id === n.refId);
+        if (req) {
+          onOpenProfile(req.user.id);
+          return;
+        }
+      } catch {
+        /* fall through to the Friends tab */
+      }
+    }
+    onGoToFriends?.();
+  }
 
   async function toggle() {
     const next = !open;
@@ -141,11 +172,13 @@ export default function NotificationBell({
               <ul>
                 {items.map((n) => (
                   <li key={n.id} className={n.readAt ? "" : "unread"}>
-                    <span className="notif-icon">{TYPE_ICON[n.type] ?? "🔔"}</span>
-                    <span className="notif-body">
-                      <span className="notif-text">{n.text}</span>
-                      <time>{timeAgo(n.createdAt)}</time>
-                    </span>
+                    <button className="notif-item-btn" onClick={() => handleItemClick(n)}>
+                      <span className="notif-icon">{TYPE_ICON[n.type] ?? "🔔"}</span>
+                      <span className="notif-body">
+                        <span className="notif-text">{n.text}</span>
+                        <time>{timeAgo(n.createdAt)}</time>
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
