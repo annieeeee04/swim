@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  fetchChatList,
   fetchConversation,
   fetchFriendRecords,
   fetchFriendRequests,
   fetchFriends,
   fetchInvites,
-  fetchUnreadMessageCounts,
+  fetchUserProfile,
   respondFriendRequest,
   respondInvite,
   searchUsers,
   sendChatMessage,
-  sendFriendRequest,
   sendSwimInvite,
   unfriend,
 } from "../api";
 import type {
+  ChatListItem,
   ChatMessage,
   FriendRequests,
   FriendSearchHit,
@@ -26,37 +27,27 @@ import type {
   User,
   UserSummary,
 } from "../types";
-import type { Character } from "../data/characters";
 import { onRealtimeEvent } from "../realtime";
 import { buildSlotsByDay, type Slot } from "../utils/slots";
 import { formatDayHeading, formatTime } from "../utils/time";
-import SwimmerAvatar from "./SwimmerAvatar";
+import UserFace from "./UserFace";
 
 // Slow safety-net polls only — presence, chat, requests and invites all
 // arrive live over the WebSocket (see ../realtime.ts).
 const FRIENDS_POLL_MS = 60_000;
 const CHAT_POLL_MS = 20_000;
 
-/** A friend's avatar colors as a Character for the 2D SwimmerAvatar. */
-function friendCharacter(u: UserSummary): Character {
-  return {
-    id: `friend-${u.id}`,
-    name: u.displayName,
-    skin: u.avatarSkin,
-    suit: u.avatarSuit,
-    cap: u.avatarCap,
-    modelUrl: "",
-  };
-}
-
-function FriendFace({ user, size = 40 }: { user: UserSummary; size?: number }) {
-  return user.photoUrl ? (
-    <img className="friend-face" src={user.photoUrl} alt="" style={{ width: size, height: size }} />
-  ) : (
-    <span className="friend-face friend-face-avatar" style={{ width: size, height: size }}>
-      <SwimmerAvatar character={friendCharacter(user)} pose="stand" size={size - 8} />
-    </span>
-  );
+/** One row in the unified left-rail chat list (friend or stranger chat). */
+interface RailRow {
+  user: UserSummary;
+  friends: boolean;
+  inPool: boolean;
+  lane: number | null;
+  poolLength: number | null;
+  unread: number;
+  lastBody: string | null;
+  lastFromMe: boolean;
+  introRemaining: number | null;
 }
 
 function summarize(records: SwimRecord[]) {
@@ -71,17 +62,37 @@ function formatSession(start: string, end: string): string {
   return `${formatDayHeading(start.slice(0, 10))} · ${formatTime(start)}–${formatTime(end)}`;
 }
 
-export default function FriendsView({ events, user }: { events: SwimEvent[]; user: User }) {
+/**
+ * The unified social hub: a fixed-width, scrollable chat list on the left
+ * (friends and stranger chats together), and one card on the right that
+ * combines the selected person's profile strip, a fixed-height chat thread,
+ * and their swim records — no more three floating boxes.
+ */
+export default function FriendsView({
+  events,
+  user,
+  initialChatUserId,
+  onInitialChatConsumed,
+  onOpenProfile,
+}: {
+  events: SwimEvent[];
+  user: User;
+  initialChatUserId?: number | null;
+  onInitialChatConsumed?: () => void;
+  onOpenProfile: (userId: number) => void;
+}) {
   const [friends, setFriends] = useState<FriendView[]>([]);
   const [requests, setRequests] = useState<FriendRequests>({ incoming: [], outgoing: [] });
   const [invites, setInvites] = useState<SwimInvite[]>([]);
-  const [unread, setUnread] = useState<Record<number, number>>({});
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [chats, setChats] = useState<ChatListItem[]>([]);
+  const [selected, setSelected] = useState<UserSummary | null>(null);
+  const [selectedIntro, setSelectedIntro] = useState<number | null>(null);
 
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<FriendSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const [paneTab, setPaneTab] = useState<"chat" | "records">("chat");
   const [friendRecords, setFriendRecords] = useState<SwimRecord[] | null>(null);
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -90,25 +101,63 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const selected = useMemo(
-    () => friends.find((f) => f.user.id === selectedId) ?? null,
-    [friends, selectedId],
-  );
   const slotsByDay = useMemo(() => buildSlotsByDay(events), [events]);
 
-  // ---- polling: friends + requests + invites + unread badges ----
+  const selectedFriendView = useMemo(
+    () => (selected ? friends.find((f) => f.user.id === selected.id) ?? null : null),
+    [friends, selected],
+  );
+  const selectedIsFriend = selectedFriendView !== null;
+
+  // ---- unified left-rail rows: chats first (newest), then message-less friends ----
+  const railRows = useMemo<RailRow[]>(() => {
+    const presence = new Map(friends.map((f) => [f.user.id, f]));
+    const rows: RailRow[] = chats.map((c) => {
+      const fv = presence.get(c.user.id);
+      return {
+        user: c.user,
+        friends: c.friends,
+        inPool: fv?.inPool ?? false,
+        lane: fv?.lane ?? null,
+        poolLength: fv?.poolLength ?? null,
+        unread: c.unread,
+        lastBody: c.lastBody,
+        lastFromMe: c.lastFromMe,
+        introRemaining: c.introRemaining,
+      };
+    });
+    const inChats = new Set(chats.map((c) => c.user.id));
+    for (const f of friends) {
+      if (!inChats.has(f.user.id)) {
+        rows.push({
+          user: f.user,
+          friends: true,
+          inPool: f.inPool,
+          lane: f.lane,
+          poolLength: f.poolLength,
+          unread: 0,
+          lastBody: null,
+          lastFromMe: false,
+          introRemaining: null,
+        });
+      }
+    }
+    return rows;
+  }, [chats, friends]);
+
+  // ---- polling: friends + requests + invites + chat list ----
   const refreshSocial = useCallback(async () => {
     try {
-      const [fr, rq, inv, un] = await Promise.all([
+      const [fr, rq, inv, ch] = await Promise.all([
         fetchFriends(),
         fetchFriendRequests(),
         fetchInvites(),
-        fetchUnreadMessageCounts(),
+        fetchChatList(),
       ]);
       setFriends(fr);
       setRequests(rq);
       setInvites(inv);
-      setUnread(un);
+      setChats(ch);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't load your friends.");
@@ -122,26 +171,40 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
     return () => clearInterval(timer);
   }, [refreshSocial]);
 
-  // Live updates over the WebSocket: presence changes and friend-graph /
-  // invite mutations trigger an immediate refetch; incoming chat messages
-  // land straight in the open thread.
+  // Deep link: "open the chat with user N" (from the bell, ranking, search…).
+  useEffect(() => {
+    if (initialChatUserId == null) return;
+    let cancelled = false;
+    fetchUserProfile(initialChatUserId)
+      .then((p) => {
+        if (cancelled) return;
+        setSelected(p.user);
+        setSelectedIntro(p.relation === "friends" ? null : p.introRemaining);
+      })
+      .catch(() => {})
+      .finally(() => onInitialChatConsumed?.());
+    return () => {
+      cancelled = true;
+    };
+  }, [initialChatUserId, onInitialChatConsumed]);
+
+  // Live updates over the WebSocket.
   useEffect(() => {
     return onRealtimeEvent((event) => {
       if (event.type === "social" || event.type === "presence") {
         refreshSocial();
       } else if (event.type === "message") {
         const msg = event.data as ChatMessage;
-        if (msg.senderId === selectedId) {
+        if (msg.senderId === selected?.id) {
           setConversation((c) => (c.some((m) => m.id === msg.id) ? c : [...c, msg]));
         } else {
-          // Bump the sender's unread badge without waiting for the next poll.
-          setUnread((u) => ({ ...u, [msg.senderId]: (u[msg.senderId] ?? 0) + 1 }));
+          refreshSocial(); // bumps unread badge + reorders the chat list
         }
       }
     });
-  }, [refreshSocial, selectedId]);
+  }, [refreshSocial, selected]);
 
-  // ---- debounced people search ----
+  // ---- debounced people search (hits open the shared profile card) ----
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -159,28 +222,25 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
     return () => clearTimeout(timer);
   }, [query]);
 
-  // ---- selected friend: records + live chat ----
+  // ---- selected person: chat (+records when they're a friend) ----
   useEffect(() => {
-    if (selectedId === null) return;
+    if (!selected) return;
+    const selectedId = selected.id;
     let cancelled = false;
-    // Reset the pane for the newly selected friend before their data arrives.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFriendRecords(null);
     setConversation([]);
-    fetchFriendRecords(selectedId)
-      .then((rs) => {
-        if (!cancelled) setFriendRecords(rs);
-      })
-      .catch(() => {
-        if (!cancelled) setFriendRecords([]);
-      });
+    setFriendRecords(null);
+    setPaneTab("chat");
+    setDraft("");
 
     const loadChat = () => {
       fetchConversation(selectedId)
         .then((msgs) => {
           if (cancelled) return;
           setConversation(msgs);
-          setUnread((u) => (u[selectedId] ? { ...u, [selectedId]: 0 } : u));
+          setChats((cs) =>
+            cs.map((c) => (c.user.id === selectedId ? { ...c, unread: 0 } : c)),
+          );
         })
         .catch(() => {});
     };
@@ -190,19 +250,57 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
       cancelled = true;
       clearInterval(timer);
     };
-  }, [selectedId]);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!selected || !selectedIsFriend) return;
+    let cancelled = false;
+    fetchFriendRecords(selected.id)
+      .then((rs) => {
+        if (!cancelled) setFriendRecords(rs);
+      })
+      .catch(() => {
+        if (!cancelled) setFriendRecords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, selectedIsFriend]);
+
+  // Keep the stranger allowance in sync with the chat list.
+  useEffect(() => {
+    if (!selected) return;
+    if (selectedIsFriend) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedIntro(null);
+      return;
+    }
+    const item = chats.find((c) => c.user.id === selected.id);
+    if (item) {
+      setSelectedIntro(item.introRemaining);
+    }
+  }, [chats, selected, selectedIsFriend]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [conversation.length]);
 
+  function selectRow(row: RailRow) {
+    setSelected(row.user);
+    setSelectedIntro(row.friends ? null : row.introRemaining);
+  }
+
   async function handleSend() {
-    if (!selectedId || !draft.trim()) return;
+    if (!selected || !draft.trim()) return;
     setSending(true);
     try {
-      const msg = await sendChatMessage(selectedId, draft.trim());
+      const msg = await sendChatMessage(selected.id, draft.trim());
       setConversation((c) => [...c, msg]);
       setDraft("");
+      if (!selectedIsFriend && selectedIntro != null) {
+        setSelectedIntro(Math.max(0, selectedIntro - 1));
+      }
+      refreshSocial();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send the message.");
     } finally {
@@ -211,10 +309,10 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
   }
 
   async function handleInviteSlot(slot: Slot, poolLength: 25 | 50) {
-    if (!selectedId) return;
+    if (!selected) return;
     try {
       await sendSwimInvite({
-        friendId: selectedId,
+        friendId: selected.id,
         sessionStart: slot.start,
         sessionEnd: slot.end,
         poolLength,
@@ -230,6 +328,7 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
   const upcomingPlans = invites.filter((i) => i.status === "ACCEPTED");
   const outgoingPending = invites.filter((i) => i.direction === "outgoing" && i.status === "PENDING");
   const stats = friendRecords ? summarize(friendRecords) : null;
+  const introExhausted = !selectedIsFriend && selectedIntro === 0;
 
   return (
     <div className="friends-view">
@@ -253,30 +352,18 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
             <ul className="friends-hits">
               {hits.map((hit) => (
                 <li key={hit.user.id}>
-                  <FriendFace user={hit.user} size={34} />
-                  <span className="friend-name">{hit.user.displayName}</span>
-                  {hit.relation === "none" && (
-                    <button
-                      className="mini-btn"
-                      onClick={() =>
-                        sendFriendRequest(hit.user.id)
-                          .then(() => {
-                            setHits((h) =>
-                              h.map((x) =>
-                                x.user.id === hit.user.id ? { ...x, relation: "requested" } : x,
-                              ),
-                            );
-                            refreshSocial();
-                          })
-                          .catch((err) => setError(err.message))
-                      }
-                    >
-                      ＋ Add
-                    </button>
-                  )}
-                  {hit.relation === "requested" && <span className="mini-tag">Requested</span>}
-                  {hit.relation === "friends" && <span className="mini-tag">Friends ✓</span>}
-                  {hit.relation === "incoming" && <span className="mini-tag">Check requests</span>}
+                  <button className="friend-row" onClick={() => onOpenProfile(hit.user.id)}>
+                    <UserFace user={hit.user} size={34} />
+                    <span className="friend-row-main">
+                      <span className="friend-name">{hit.user.displayName}</span>
+                      <span className="friend-sub">
+                        {hit.relation === "friends" && "Friends ✓"}
+                        {hit.relation === "requested" && "Request sent"}
+                        {hit.relation === "incoming" && "Sent you a request"}
+                        {hit.relation === "none" && "View profile"}
+                      </span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -284,12 +371,21 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
 
           {requests.incoming.length > 0 && (
             <section className="friends-section">
-              <h3>Friend requests</h3>
+              <h3>
+                Friend requests <span className="count-pill">{requests.incoming.length}</span>
+              </h3>
               <ul className="friends-requests">
                 {requests.incoming.map((req) => (
                   <li key={req.id}>
-                    <FriendFace user={req.user} size={34} />
-                    <span className="friend-name">{req.user.displayName}</span>
+                    <button className="friend-row" onClick={() => onOpenProfile(req.user.id)}>
+                      <UserFace user={req.user} size={34} />
+                      <span className="friend-row-main">
+                        <span className="friend-name">{req.user.displayName}</span>
+                        <span className="friend-sub">
+                          {req.message ? `“${req.message}”` : "Tap to view profile"}
+                        </span>
+                      </span>
+                    </button>
                     <span className="req-actions">
                       <button
                         className="mini-btn"
@@ -312,33 +408,36 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
 
           <section className="friends-section friends-list-section">
             <h3>
-              Friends <span className="count-pill">{friends.length}</span>
+              Chats <span className="count-pill">{railRows.length}</span>
             </h3>
-            {friends.length === 0 ? (
+            {railRows.length === 0 ? (
               <p className="friends-empty">
-                No friends yet — search above to add your first swim buddy.
+                No chats yet — search above to find your first swim buddy.
               </p>
             ) : (
               <ul className="friends-list">
-                {friends.map((f) => (
-                  <li key={f.user.id}>
+                {railRows.map((row) => (
+                  <li key={row.user.id}>
                     <button
-                      className={`friend-row ${selectedId === f.user.id ? "active" : ""}`}
-                      onClick={() => setSelectedId(f.user.id)}
+                      className={`friend-row ${selected?.id === row.user.id ? "active" : ""}`}
+                      onClick={() => selectRow(row)}
                     >
-                      <span className={`presence-dot ${f.inPool ? "in-pool" : ""}`} />
-                      <FriendFace user={f.user} />
+                      <span className={`presence-dot ${row.inPool ? "in-pool" : ""}`} />
+                      <UserFace user={row.user} />
                       <span className="friend-row-main">
-                        <span className="friend-name">{f.user.displayName}</span>
+                        <span className="friend-name">
+                          {row.user.displayName}
+                          {!row.friends && <span className="stranger-tag">new</span>}
+                        </span>
                         <span className="friend-sub">
-                          {f.inPool
-                            ? `In the pool now · Lane ${f.lane} (${f.poolLength}m)`
-                            : "Not swimming"}
+                          {row.inPool
+                            ? `In the pool now · Lane ${row.lane} (${row.poolLength}m)`
+                            : row.lastBody
+                              ? `${row.lastFromMe ? "You: " : ""}${row.lastBody}`
+                              : "Not swimming"}
                         </span>
                       </span>
-                      {(unread[f.user.id] ?? 0) > 0 && (
-                        <span className="unread-badge">{unread[f.user.id]}</span>
-                      )}
+                      {row.unread > 0 && <span className="unread-badge">{row.unread}</span>}
                     </button>
                   </li>
                 ))}
@@ -360,7 +459,7 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
               <h3>Swim plans</h3>
               {incomingInvites.map((inv) => (
                 <div key={inv.id} className="invite-card invite-incoming">
-                  <FriendFace user={inv.friend} size={36} />
+                  <UserFace user={inv.friend} size={36} />
                   <span className="invite-text">
                     <strong>{inv.friend.displayName}</strong> invites you to swim ·{" "}
                     {formatSession(inv.sessionStart, inv.sessionEnd)} · {inv.poolLength}m pool
@@ -384,7 +483,7 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
               ))}
               {upcomingPlans.map((inv) => (
                 <div key={inv.id} className="invite-card invite-confirmed">
-                  <FriendFace user={inv.friend} size={36} />
+                  <UserFace user={inv.friend} size={36} />
                   <span className="invite-text">
                     ✅ Swimming with <strong>{inv.friend.displayName}</strong> ·{" "}
                     {formatSession(inv.sessionStart, inv.sessionEnd)} · {inv.poolLength}m pool —
@@ -394,7 +493,7 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
               ))}
               {outgoingPending.map((inv) => (
                 <div key={inv.id} className="invite-card invite-pending">
-                  <FriendFace user={inv.friend} size={36} />
+                  <UserFace user={inv.friend} size={36} />
                   <span className="invite-text">
                     ⏳ Waiting for <strong>{inv.friend.displayName}</strong> ·{" "}
                     {formatSession(inv.sessionStart, inv.sessionEnd)} · {inv.poolLength}m pool
@@ -408,96 +507,137 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
             <div className="friends-placeholder glass-surface" data-glass>
               <h2>Your swim crew</h2>
               <p>
-                Add friends to see their swim records, chat, and invite them to a Length Swim
-                session. When a friend is in the pool you'll see them live — both here and swimming
-                in the 3D pool.
+                Pick a chat on the left, or search to meet new swimmers. You can send anyone a few
+                intro messages — add them as a friend to chat freely, see their records, and plan
+                swims together.
               </p>
             </div>
           ) : (
-            <div className="friend-profile">
-              <header className="friend-profile-head glass-surface" data-glass>
-                <FriendFace user={selected.user} size={56} />
-                <div className="friend-profile-id">
-                  <h2>{selected.user.displayName}</h2>
-                  <p className={selected.inPool ? "profile-inpool" : "profile-idle"}>
-                    {selected.inPool
-                      ? `🌊 In the pool right now — Lane ${selected.lane}, ${selected.poolLength}m pool. Go say hi!`
-                      : "Not in the pool right now"}
-                  </p>
-                </div>
+            <section className="friend-hub glass-surface" data-glass>
+              {/* ---- profile strip ---- */}
+              <header className="friend-hub-head">
+                <button
+                  className="friend-hub-identity"
+                  onClick={() => onOpenProfile(selected.id)}
+                  title="View profile"
+                >
+                  <UserFace user={selected} size={52} />
+                  <span className="friend-profile-id">
+                    <h2>{selected.displayName}</h2>
+                    <p className={selectedFriendView?.inPool ? "profile-inpool" : "profile-idle"}>
+                      {selectedFriendView?.inPool
+                        ? `🌊 In the pool — Lane ${selectedFriendView.lane}, ${selectedFriendView.poolLength}m. Go say hi!`
+                        : selectedIsFriend
+                          ? "Not in the pool right now"
+                          : "Not friends yet"}
+                    </p>
+                  </span>
+                </button>
+
+                {selectedIsFriend && stats && (
+                  <div className="friend-hub-stats">
+                    <span>
+                      <strong>{stats.swims}</strong> swims
+                    </span>
+                    <span>
+                      <strong>{stats.total.toLocaleString()}m</strong> total
+                    </span>
+                    <span>
+                      <strong>{stats.longest.toLocaleString()}m</strong> longest
+                    </span>
+                  </div>
+                )}
+
                 <div className="friend-profile-actions">
-                  <button className="length-button" onClick={() => setInvitePickerOpen(true)}>
-                    Invite to swim 🤝
-                  </button>
-                  <button
-                    className="mini-btn mini-btn-ghost"
-                    title="Remove friend"
-                    onClick={() =>
-                      unfriend(selected.user.id).then(() => {
-                        setSelectedId(null);
-                        refreshSocial();
-                      })
-                    }
-                  >
-                    Unfriend
-                  </button>
+                  {selectedIsFriend ? (
+                    <>
+                      <button className="length-button" onClick={() => setInvitePickerOpen(true)}>
+                        Invite to swim 🤝
+                      </button>
+                      <button
+                        className="mini-btn mini-btn-ghost"
+                        title="Remove friend"
+                        onClick={() =>
+                          unfriend(selected.id).then(() => {
+                            setSelected(null);
+                            refreshSocial();
+                          })
+                        }
+                      >
+                        Unfriend
+                      </button>
+                    </>
+                  ) : (
+                    <button className="length-button" onClick={() => onOpenProfile(selected.id)}>
+                      ＋ Add friend
+                    </button>
+                  )}
                 </div>
               </header>
 
-              <div className="friend-profile-grid">
-                <section className="friend-records glass-surface" data-glass>
-                  <h3>Swim records</h3>
+              {/* ---- segmented control (records are friends-only) ---- */}
+              {selectedIsFriend && (
+                <div className="friend-hub-tabs" role="tablist">
+                  <button
+                    role="tab"
+                    aria-selected={paneTab === "chat"}
+                    className={paneTab === "chat" ? "active" : ""}
+                    onClick={() => setPaneTab("chat")}
+                  >
+                    Chat
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={paneTab === "records"}
+                    className={paneTab === "records" ? "active" : ""}
+                    onClick={() => setPaneTab("records")}
+                  >
+                    Swim records
+                  </button>
+                </div>
+              )}
+
+              {/* ---- body ---- */}
+              {paneTab === "records" && selectedIsFriend ? (
+                <div className="friend-hub-records">
                   {friendRecords === null ? (
                     <p className="friends-empty">Loading…</p>
+                  ) : friendRecords.length === 0 ? (
+                    <p className="friends-empty">No swims logged yet.</p>
                   ) : (
-                    <>
-                      {stats && (
-                        <div className="friend-stats">
-                          <div className="friend-stat">
-                            <strong>{stats.swims}</strong>
-                            <span>swims</span>
-                          </div>
-                          <div className="friend-stat">
-                            <strong>{stats.total.toLocaleString()}m</strong>
-                            <span>total</span>
-                          </div>
-                          <div className="friend-stat">
-                            <strong>{stats.longest.toLocaleString()}m</strong>
-                            <span>longest</span>
-                          </div>
-                        </div>
-                      )}
-                      {friendRecords.length === 0 ? (
-                        <p className="friends-empty">No swims logged yet.</p>
-                      ) : (
-                        <ul className="friend-record-list">
-                          {friendRecords.slice(0, 12).map((r) => (
-                            <li key={r.id}>
-                              <span className="rec-when">
-                                {new Date(r.startedAt).toLocaleDateString(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </span>
-                              <span className="rec-what">
-                                {r.completedAt
-                                  ? `${r.distanceMeters ?? 0}m`
-                                  : "swimming now…"}{" "}
-                                · Lane {r.lane} · {r.poolLength}m pool
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </>
+                    <ul className="friend-record-list">
+                      {friendRecords.map((r) => (
+                        <li key={r.id}>
+                          <span className="rec-when">
+                            {new Date(r.startedAt).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                          <span className="rec-what">
+                            {r.completedAt ? `${r.distanceMeters ?? 0}m` : "swimming now…"} · Lane{" "}
+                            {r.lane} · {r.poolLength}m pool
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </section>
+                </div>
+              ) : (
+                <>
+                  {!selectedIsFriend && selectedIntro != null && selectedIntro > 0 && (
+                    <p className="stranger-banner">
+                      👋 You're not friends with {selected.displayName} yet — you can send{" "}
+                      <strong>
+                        {selectedIntro} more intro message{selectedIntro === 1 ? "" : "s"}
+                      </strong>
+                      . Add them as a friend for unlimited chat.
+                    </p>
+                  )}
 
-                <section className="friend-chat glass-surface" data-glass>
-                  <h3>Messages</h3>
                   <div className="chat-thread">
                     {conversation.length === 0 && (
-                      <p className="friends-empty">Say hi to {selected.user.displayName}! 👋</p>
+                      <p className="friends-empty">Say hi to {selected.displayName}! 👋</p>
                     )}
                     {conversation.map((m) => (
                       <div
@@ -515,27 +655,40 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
                     ))}
                     <div ref={chatEndRef} />
                   </div>
-                  <form
-                    className="chat-compose"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSend();
-                    }}
-                  >
-                    <input
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      placeholder={`Message ${selected.user.displayName}…`}
-                      maxLength={2000}
-                      disabled={sending}
-                    />
-                    <button type="submit" className="mini-btn" disabled={sending || !draft.trim()}>
-                      Send
-                    </button>
-                  </form>
-                </section>
-              </div>
-            </div>
+
+                  {introExhausted ? (
+                    <div className="stranger-limit-alert">
+                      <p>
+                        🔒 You've used your intro messages. Add{" "}
+                        <strong>{selected.displayName}</strong> as a friend to keep chatting.
+                      </p>
+                      <button className="length-button" onClick={() => onOpenProfile(selected.id)}>
+                        ＋ Add friend
+                      </button>
+                    </div>
+                  ) : (
+                    <form
+                      className="chat-compose"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSend();
+                      }}
+                    >
+                      <input
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        placeholder={`Message ${selected.displayName}…`}
+                        maxLength={2000}
+                        disabled={sending}
+                      />
+                      <button type="submit" className="mini-btn" disabled={sending || !draft.trim()}>
+                        Send
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
+            </section>
           )}
         </main>
       </div>
@@ -559,9 +712,7 @@ export default function FriendsView({ events, user }: { events: SwimEvent[]; use
               transition={{ type: "spring", stiffness: 320, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3>
-                Pick a session to swim with {selected.user.displayName}
-              </h3>
+              <h3>Pick a session to swim with {selected.displayName}</h3>
               {slotsByDay.length === 0 ? (
                 <p className="friends-empty">No upcoming Length Swim sessions in the schedule.</p>
               ) : (

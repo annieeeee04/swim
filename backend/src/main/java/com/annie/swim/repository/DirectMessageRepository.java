@@ -16,4 +16,12 @@ public interface DirectMessageRepository extends JpaRepository<DirectMessage, Lo
 
     /** Unread messages addressed to a user (for per-friend unread badges). */
     List<DirectMessage> findByRecipientIdAndReadAtIsNull(Long recipientId);
+
+    /** Every message the user sent or received, newest first (chat list). */
+    @Query("select m from DirectMessage m where m.senderId = :u or m.recipientId = :u "
+            + "order by m.sentAt desc")
+    List<DirectMessage> findAllInvolving(@Param("u") Long userId);
+
+    /** How many messages one user has sent another (stranger-chat cap). */
+    long countBySenderIdAndRecipientId(Long senderId, Long recipientId);
 }

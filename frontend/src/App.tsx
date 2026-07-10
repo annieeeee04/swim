@@ -24,6 +24,7 @@ import AuthScreen from "./components/AuthScreen";
 import SwimSchool from "./components/SwimSchool";
 import CoachView from "./components/CoachView";
 import SwimmerAvatar from "./components/SwimmerAvatar";
+import UserProfileModal from "./components/UserProfileModal";
 import type { Character } from "./data/characters";
 import type { PoolFilter, SwimEvent, User } from "./types";
 
@@ -57,6 +58,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Cross-tab social navigation: any view can open a user's profile card, and
+  // the card (or a message notification) can jump straight into their chat.
+  const [profileUserId, setProfileUserId] = useState<number | null>(null);
+  const [pendingChatUserId, setPendingChatUserId] = useState<number | null>(null);
+
+  const openProfile = useCallback((userId: number) => setProfileUserId(userId), []);
+  const openChat = useCallback((userId: number) => {
+    setProfileUserId(null);
+    setPendingChatUserId(userId);
+    setTab("friends");
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,7 +171,11 @@ function App() {
         </div>
 
         <div className="user-chip">
-          <NotificationBell onGoToFriends={() => setTab("friends")} />
+          <NotificationBell
+            onGoToFriends={() => setTab("friends")}
+            onOpenChat={openChat}
+            onOpenProfile={openProfile}
+          />
           <span className="user-chip-avatar">
             {user.photoUrl ? (
               <img src={user.photoUrl} alt="" />
@@ -241,13 +258,29 @@ function App() {
 
       {tab === "pool" && <PoolView events={events} user={user} />}
 
-      {tab === "friends" && <FriendsView events={events} user={user} />}
+      {tab === "friends" && (
+        <FriendsView
+          events={events}
+          user={user}
+          initialChatUserId={pendingChatUserId}
+          onInitialChatConsumed={() => setPendingChatUserId(null)}
+          onOpenProfile={openProfile}
+        />
+      )}
 
-      {tab === "ranking" && <Leaderboard />}
+      {tab === "ranking" && <Leaderboard onOpenProfile={openProfile} />}
 
       {tab === "records" && <RecordsView />}
 
       {tab === "coach" && <CoachView />}
+
+      {profileUserId !== null && (
+        <UserProfileModal
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+          onOpenChat={(u) => openChat(u.id)}
+        />
+      )}
     </div>
   );
 }

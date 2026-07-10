@@ -1,12 +1,14 @@
 import type {
   AppNotification,
   AuthResponse,
+  ChatListItem,
   ChatMessage,
   FriendRequest,
   FriendRequests,
   FriendSearchHit,
   FriendView,
   LeaderboardEntry,
+  PublicProfile,
   ScheduleResponse,
   SwimInvite,
   SwimRecord,
@@ -235,13 +237,26 @@ export async function fetchFriendRequests(): Promise<FriendRequests> {
   return res.json();
 }
 
-export async function sendFriendRequest(userId: number): Promise<FriendRequest> {
+/** Sends a friend request, optionally with a short intro note. */
+export async function sendFriendRequest(
+  userId: number,
+  message?: string,
+): Promise<FriendRequest> {
   const res = await fetch(`${API_BASE}/api/friends/requests`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, message: message?.trim() || null }),
   });
   if (!res.ok) await failure(res, "Couldn't send the friend request.");
+  return res.json();
+}
+
+/** Public profile card for any user (ranking / search / notifications). */
+export async function fetchUserProfile(userId: number): Promise<PublicProfile> {
+  const res = await fetch(`${API_BASE}/api/users/${userId}/profile`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't load this profile.");
   return res.json();
 }
 
@@ -274,6 +289,13 @@ export async function fetchFriendRecords(friendUserId: number): Promise<SwimReco
 }
 
 // ===================== messages =====================
+
+/** The chat list: one entry per conversation partner, newest first. */
+export async function fetchChatList(): Promise<ChatListItem[]> {
+  const res = await fetch(`${API_BASE}/api/messages`, { headers: authHeaders() });
+  if (!res.ok) await failure(res, "Couldn't load your chats.");
+  return res.json();
+}
 
 export async function fetchConversation(friendId: number): Promise<ChatMessage[]> {
   const res = await fetch(`${API_BASE}/api/messages/${friendId}`, { headers: authHeaders() });

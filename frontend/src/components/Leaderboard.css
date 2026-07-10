@@ -243,3 +243,18 @@
     display: none;
   }
 }
+
+/* Clickable swimmer faces → shared profile card. */
+.lb-face-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lb-face-btn:hover {
+  transform: scale(1.07);
+  box-shadow: 0 4px 14px rgba(20, 30, 70, 0.25);
+}

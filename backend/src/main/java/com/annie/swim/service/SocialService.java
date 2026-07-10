@@ -2,6 +2,7 @@ package com.annie.swim.service;
 
 import com.annie.swim.model.Friendship;
 import com.annie.swim.model.Notification;
+import com.annie.swim.repository.DirectMessageRepository;
 import com.annie.swim.repository.FriendshipRepository;
 import com.annie.swim.repository.NotificationRepository;
 import org.springframework.http.HttpStatus;
@@ -16,14 +17,19 @@ import java.util.Objects;
 @Service
 public class SocialService {
 
+    /** Max messages you can send someone who isn't (yet) your friend. */
+    public static final int STRANGER_MESSAGE_LIMIT = 3;
+
     private final FriendshipRepository friendships;
     private final NotificationRepository notifications;
+    private final DirectMessageRepository messages;
     private final PushService push;
 
     public SocialService(FriendshipRepository friendships, NotificationRepository notifications,
-                         PushService push) {
+                         DirectMessageRepository messages, PushService push) {
         this.friendships = friendships;
         this.notifications = notifications;
+        this.messages = messages;
         this.push = push;
     }
 
@@ -47,6 +53,12 @@ public class SocialService {
             out.add(Objects.equals(f.getRequesterId(), userId) ? f.getAddresseeId() : f.getRequesterId());
         }
         return out;
+    }
+
+    /** Stranger-chat allowance: intro messages left before a friendship is required. */
+    public int remainingIntroMessages(Long fromId, Long toId) {
+        return (int) Math.max(0,
+                STRANGER_MESSAGE_LIMIT - messages.countBySenderIdAndRecipientId(fromId, toId));
     }
 
     /** Saves an in-app notification AND pushes it live over the user's WebSocket. */

@@ -124,13 +124,15 @@ public class FriendController {
         for (Friendship f : friendships.findByAddresseeIdAndStatusOrderByCreatedAtDesc(
                 me.getId(), Friendship.Status.PENDING.name())) {
             users.findById(f.getRequesterId())
-                    .ifPresent(u -> incoming.add(new RequestView(f.getId(), UserSummary.from(u), f.getCreatedAt())));
+                    .ifPresent(u -> incoming.add(
+                            new RequestView(f.getId(), UserSummary.from(u), f.getCreatedAt(), f.getMessage())));
         }
         List<RequestView> outgoing = new ArrayList<>();
         for (Friendship f : friendships.findByRequesterIdAndStatusOrderByCreatedAtDesc(
                 me.getId(), Friendship.Status.PENDING.name())) {
             users.findById(f.getAddresseeId())
-                    .ifPresent(u -> outgoing.add(new RequestView(f.getId(), UserSummary.from(u), f.getCreatedAt())));
+                    .ifPresent(u -> outgoing.add(
+                            new RequestView(f.getId(), UserSummary.from(u), f.getCreatedAt(), f.getMessage())));
         }
         return new RequestsView(incoming, outgoing);
     }
@@ -162,11 +164,23 @@ public class FriendController {
             return accept(authHeader, existing.getId());
         }
 
-        Friendship f = friendships.save(new Friendship(me.getId(), other.getId()));
-        social.notify(other.getId(), Notification.Type.FRIEND_REQUEST,
-                me.getDisplayName() + " sent you a friend request", f.getId());
+        // Optional intro note sent along with the request ("Hi, we met in lane 3!").
+        String message = body.message() == null || body.message().isBlank()
+                ? null
+                : body.message().trim();
+        if (message != null && message.length() > 300) {
+            message = message.substring(0, 300);
+        }
+
+        Friendship f = friendships.save(new Friendship(me.getId(), other.getId(), message));
+        String notifText = me.getDisplayName() + " sent you a friend request";
+        if (message != null) {
+            String preview = message.length() > 120 ? message.substring(0, 120) + "…" : message;
+            notifText += " — “" + preview + "”";
+        }
+        social.notify(other.getId(), Notification.Type.FRIEND_REQUEST, notifText, f.getId());
         push.sendToUser(other.getId(), "social", null);
-        return new RequestView(f.getId(), UserSummary.from(other), f.getCreatedAt());
+        return new RequestView(f.getId(), UserSummary.from(other), f.getCreatedAt(), f.getMessage());
     }
 
     @PostMapping("/requests/{id}/accept")
@@ -183,7 +197,7 @@ public class FriendController {
                 me.getDisplayName() + " accepted your friend request — you're now friends!", f.getId());
         push.sendToUser(f.getRequesterId(), "social", null);
         return new RequestView(f.getId(),
-                requester != null ? UserSummary.from(requester) : null, f.getCreatedAt());
+                requester != null ? UserSummary.from(requester) : null, f.getCreatedAt(), f.getMessage());
     }
 
     @PostMapping("/requests/{id}/decline")
@@ -234,12 +248,12 @@ public class FriendController {
     public record SearchHit(UserSummary user, String relation) {
     }
 
-    public record RequestView(Long id, UserSummary user, Instant createdAt) {
+    public record RequestView(Long id, UserSummary user, Instant createdAt, String message) {
     }
 
     public record RequestsView(List<RequestView> incoming, List<RequestView> outgoing) {
     }
 
-    public record SendRequest(Long userId) {
+    public record SendRequest(Long userId, String message) {
     }
 }
