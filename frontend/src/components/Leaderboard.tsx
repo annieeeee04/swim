@@ -142,22 +142,29 @@ export default function Leaderboard({
 
           {rest.length > 0 && (
             <ol className="lb-list">
-              {rest.map((e) => (
-                <li
-                  key={`${e.userId ?? "demo"}-${e.displayName}-${e.rank}`}
-                  className={`lb-row glass-surface ${isMe(e) ? "is-me" : ""}`}
-                  data-glass
-                >
-                  <span className="lb-row-rank">{e.rank}</span>
-                  <Face entry={e} size={40} onOpen={openFor(e)} />
-                  <span className="lb-row-name">
-                    {e.displayName}
-                    {isMe(e) && <span className="lb-you-tag">YOU</span>}
-                  </span>
-                  <span className="lb-row-swims">{e.swims} swims</span>
-                  <span className="lb-row-meters">{Math.round(e.totalMeters)}m</span>
-                </li>
-              ))}
+              {rest.map((e) => {
+                const open = openFor(e);
+                return (
+                  <li
+                    key={`${e.userId ?? "demo"}-${e.displayName}-${e.rank}`}
+                    className={`lb-row glass-surface ${isMe(e) ? "is-me" : ""} ${open ? "lb-row-clickable" : ""}`}
+                    data-glass
+                    onClick={open}
+                    role={open ? "button" : undefined}
+                    tabIndex={open ? 0 : undefined}
+                    onKeyDown={open ? (ev) => ev.key === "Enter" && open() : undefined}
+                  >
+                    <span className="lb-row-rank">{e.rank}</span>
+                    <Face entry={e} size={40} />
+                    <span className="lb-row-name">
+                      {e.displayName}
+                      {isMe(e) && <span className="lb-you-tag">YOU</span>}
+                    </span>
+                    <span className="lb-row-swims">{e.swims} swims</span>
+                    <span className="lb-row-meters">{Math.round(e.totalMeters)}m</span>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </>

@@ -245,6 +245,15 @@
 }
 
 /* Clickable swimmer faces → shared profile card. */
+.lb-row-clickable {
+  cursor: pointer;
+}
+
+.lb-row-clickable:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
+}
+
 .lb-face-btn {
   background: none;
   border: none;
