@@ -14,8 +14,17 @@
   padding: 34px 22px 44px;
   margin: 0 0 10px;
   background: radial-gradient(120% 140% at 15% -10%, #fffbea 0%, #fff3c4 55%, #ffe9a3 100%);
-  color: var(--color-ink);
+  color: #1a1a1a;
   box-shadow: 0 20px 50px rgba(214, 167, 60, 0.18);
+
+  /* Override dark-theme variables for this light-background panel */
+  --color-ink: #1a1a1a;
+  --color-muted: #6b6b63;
+  --color-accent-dark: #92400e;
+  --color-success: #15803d;
+  --color-success-bg: rgba(21, 128, 61, 0.12);
+  --color-live: #b45309;
+  --color-live-bg: rgba(180, 83, 9, 0.12);
 }
 
 /* ---------- fluid glass background blobs ---------- */
@@ -231,8 +240,8 @@
 .record-chip {
   font-size: 10.5px;
   font-weight: 700;
-  background: rgba(168, 85, 247, 0.1);
-  color: var(--color-accent-dark);
+  background: rgba(168, 85, 247, 0.15);
+  color: #6d28d9;
   border-radius: 8px;
   padding: 3px 9px;
 }

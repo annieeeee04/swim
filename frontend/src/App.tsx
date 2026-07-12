@@ -25,6 +25,7 @@ import SwimSchool from "./components/SwimSchool";
 import CoachView from "./components/CoachView";
 import SwimmerAvatar from "./components/SwimmerAvatar";
 import UserProfileModal from "./components/UserProfileModal";
+import ProfileSettingsModal from "./components/ProfileSettingsModal";
 import type { Character } from "./data/characters";
 import type { PoolFilter, SwimEvent, User } from "./types";
 
@@ -139,6 +140,7 @@ function App() {
   // the card (or a message notification) can jump straight into their chat.
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
   const [pendingChatUserId, setPendingChatUserId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const openProfile = useCallback((userId: number) => setProfileUserId(userId), []);
   const openChat = useCallback((userId: number) => {
@@ -278,13 +280,18 @@ function App() {
         </div>
 
         <div className="sidebar-profile">
-          <span className="sidebar-avatar">
+          <button
+            className="sidebar-avatar"
+            onClick={() => setSettingsOpen(true)}
+            title="Edit profile"
+          >
             {user.photoUrl ? (
               <img src={user.photoUrl} alt="" />
             ) : (
               <SwimmerAvatar character={userCharacter(user)} pose="stand" size={64} />
             )}
-          </span>
+            <span className="sidebar-avatar-edit" aria-hidden="true">✎</span>
+          </button>
           <h2 className="sidebar-name">{user.displayName}</h2>
           <p className="sidebar-role">Swimmer</p>
           <div className="sidebar-stats">
@@ -401,6 +408,8 @@ function App() {
           onOpenChat={(u) => openChat(u.id)}
         />
       )}
+
+      {settingsOpen && <ProfileSettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
