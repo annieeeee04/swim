@@ -1,5 +1,6 @@
 .aquatic-schedule {
-  max-width: 1080px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 4px 4px 40px;
 }
@@ -149,7 +150,7 @@
 .aquatic-stage {
   position: relative;
   width: 100%;
-  height: min(78vh, 640px);
+  height: min(80vh, 740px);
   min-height: 460px;
   background: radial-gradient(ellipse 92% 88% at 50% 48%, rgba(207, 234, 255, 0.5) 0%, transparent 88%);
   -webkit-mask-image: radial-gradient(ellipse 96% 92% at 50% 48%, #000 55%, transparent 100%);

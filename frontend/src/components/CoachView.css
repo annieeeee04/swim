@@ -3,10 +3,11 @@
 .coach {
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
-  padding: 14px;
-  min-height: 60vh;
-  max-height: 72vh;
+  border-radius: 24px;
+  padding: 16px;
+  /* fill the viewport like the sidebar; history scrolls inside */
+  height: calc(100svh - 210px);
+  min-height: 480px;
 }
 
 .coach-messages {
