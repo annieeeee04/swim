@@ -34,7 +34,8 @@ public class AuthController {
     @PostMapping("/signup")
     public AuthResponse signup(@RequestBody SignupRequest req) {
         User user = auth.signup(req.email(), req.password(), req.displayName());
-        applyProfile(user, req.gender(), req.age(), req.avatarSkin(), req.avatarSuit(), req.avatarCap(), req.avatarBase());
+        applyProfile(user, req.gender(), req.age(), req.avatarSkin(), req.avatarSuit(), req.avatarCap(), req.avatarBase(),
+                req.avatarBodyShape(), req.avatarHairStyle(), req.avatarHairColor(), req.avatarSuitStyle());
         users.save(user);
         return new AuthResponse(auth.issueToken(user), UserView.from(user));
     }
@@ -55,7 +56,7 @@ public class AuthController {
         auth.logout(authHeader);
     }
 
-    /** Update display name / gender / age / avatar colors. */
+    /** Update display name / gender / age / avatar colors + new look options. */
     @PutMapping("/profile")
     public UserView updateProfile(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
@@ -64,7 +65,8 @@ public class AuthController {
         if (req.displayName() != null && !req.displayName().isBlank()) {
             user.setDisplayName(req.displayName().trim());
         }
-        applyProfile(user, req.gender(), req.age(), req.avatarSkin(), req.avatarSuit(), req.avatarCap(), req.avatarBase());
+        applyProfile(user, req.gender(), req.age(), req.avatarSkin(), req.avatarSuit(), req.avatarCap(), req.avatarBase(),
+                req.avatarBodyShape(), req.avatarHairStyle(), req.avatarHairColor(), req.avatarSuitStyle());
         return UserView.from(users.save(user));
     }
 
@@ -89,7 +91,9 @@ public class AuthController {
         return UserView.from(users.save(user));
     }
 
-    private void applyProfile(User user, String gender, Integer age, String skin, String suit, String cap, String base) {
+    private void applyProfile(User user, String gender, Integer age,
+            String skin, String suit, String cap, String base,
+            String bodyShape, String hairStyle, String hairColor, String suitStyle) {
         if (gender != null) {
             user.setGender(gender);
         }
@@ -108,6 +112,18 @@ public class AuthController {
         if (base != null) {
             user.setAvatarBase(base);
         }
+        if (bodyShape != null) {
+            user.setAvatarBodyShape(bodyShape);
+        }
+        if (hairStyle != null) {
+            user.setAvatarHairStyle(hairStyle);
+        }
+        if (hairColor != null) {
+            user.setAvatarHairColor(hairColor);
+        }
+        if (suitStyle != null) {
+            user.setAvatarSuitStyle(suitStyle);
+        }
     }
 
     public record SignupRequest(
@@ -119,7 +135,11 @@ public class AuthController {
             String avatarSkin,
             String avatarSuit,
             String avatarCap,
-            String avatarBase) {
+            String avatarBase,
+            String avatarBodyShape,
+            String avatarHairStyle,
+            String avatarHairColor,
+            String avatarSuitStyle) {
     }
 
     public record LoginRequest(String email, String password) {
@@ -132,7 +152,11 @@ public class AuthController {
             String avatarSkin,
             String avatarSuit,
             String avatarCap,
-            String avatarBase) {
+            String avatarBase,
+            String avatarBodyShape,
+            String avatarHairStyle,
+            String avatarHairColor,
+            String avatarSuitStyle) {
     }
 
     public record PhotoRequest(String dataUrl) {

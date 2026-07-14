@@ -42,6 +42,10 @@ export interface User {
   avatarSuit: string | null;
   avatarCap: string | null;
   avatarBase: string | null;
+  avatarBodyShape: string | null;
+  avatarHairStyle: string | null;
+  avatarHairColor: string | null;
+  avatarSuitStyle: string | null;
   /** Uploaded profile photo (data URL). Records/leaderboard only — never in-pool. */
   photoUrl: string | null;
 }

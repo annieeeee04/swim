@@ -25,6 +25,10 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
     suit: user?.avatarSuit ?? "#ec4899",
     cap: user?.avatarCap ?? "#a855f7",
     base: user?.avatarBase ?? "classic",
+    bodyShape: (user?.avatarBodyShape as AvatarLook["bodyShape"]) ?? "athletic",
+    hairStyle: (user?.avatarHairStyle as AvatarLook["hairStyle"]) ?? "short",
+    hairColor: user?.avatarHairColor ?? "#3b1d08",
+    suitStyle: (user?.avatarSuitStyle as AvatarLook["suitStyle"]) ?? "classic",
   });
   /** undefined = untouched · string = new upload · null = remove photo */
   const [photo, setPhoto] = useState<string | null | undefined>(undefined);
@@ -64,6 +68,10 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
         avatarSuit: look.suit,
         avatarCap: look.cap,
         avatarBase: look.base,
+        avatarBodyShape: look.bodyShape,
+        avatarHairStyle: look.hairStyle,
+        avatarHairColor: look.hairColor,
+        avatarSuitStyle: look.suitStyle,
       });
       if (photo !== undefined) {
         updated = await uploadPhoto(photo);
@@ -105,6 +113,10 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
                   character={{ id: "me", name: "", skin: look.skin, suit: look.suit, cap: look.cap, modelUrl: "" }}
                   pose="stand"
                   size={54}
+                  bodyShape={look.bodyShape}
+                  hairStyle={look.hairStyle}
+                  hairColor={look.hairColor}
+                  suitStyle={look.suitStyle}
                 />
               )}
             </span>

@@ -131,6 +131,10 @@ export interface SignupPayload {
   avatarSuit: string;
   avatarCap: string;
   avatarBase: string;
+  avatarBodyShape?: string;
+  avatarHairStyle?: string;
+  avatarHairColor?: string;
+  avatarSuitStyle?: string;
 }
 
 export async function signup(payload: SignupPayload): Promise<AuthResponse> {
@@ -179,6 +183,10 @@ export interface ProfilePatch {
   avatarSuit?: string;
   avatarCap?: string;
   avatarBase?: string;
+  avatarBodyShape?: string;
+  avatarHairStyle?: string;
+  avatarHairColor?: string;
+  avatarSuitStyle?: string;
 }
 
 export async function updateProfile(patch: ProfilePatch): Promise<User> {

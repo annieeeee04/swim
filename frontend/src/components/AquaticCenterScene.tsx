@@ -14,12 +14,25 @@ export interface ZoneLayout {
   count: number;
 }
 
+/** One guided-tour viewpoint: where the camera stands and what it faces. */
+export interface TourCamera {
+  key: string;
+  position: [number, number, number];
+  lookAt: [number, number, number];
+}
+
 interface AquaticCenterSceneProps {
   zones: ZoneLayout[];
   activeZoneKey: string | null;
   focusZoneKey?: string | null;
   onPickZone?: (key: string) => void;
   onHoverZone?: (key: string | null) => void;
+  /**
+   * Klapty-style guided tour. Non-null = tour mode: the camera flies to the
+   * stop, orbit controls pause, and dragging looks around from that spot
+   * (first-person panorama). Null = normal overview mode.
+   */
+  tourStop?: TourCamera | null;
 }
 
 const DEFAULT_CAM_POS = new THREE.Vector3(-0.5, 13.5, 13.5);
@@ -425,14 +438,15 @@ export default function AquaticCenterScene({
   focusZoneKey = null,
   onPickZone,
   onHoverZone,
+  tourStop = null,
 }: AquaticCenterSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const zoneMeshesRef = useRef<THREE.Mesh[]>([]);
-  const stateRef = useRef({ activeZoneKey, onPickZone, onHoverZone, focusZoneKey });
+  const stateRef = useRef({ activeZoneKey, onPickZone, onHoverZone, focusZoneKey, tourStop });
 
   useEffect(() => {
-    stateRef.current = { activeZoneKey, onPickZone, onHoverZone, focusZoneKey };
-  }, [activeZoneKey, onPickZone, onHoverZone, focusZoneKey]);
+    stateRef.current = { activeZoneKey, onPickZone, onHoverZone, focusZoneKey, tourStop };
+  }, [activeZoneKey, onPickZone, onHoverZone, focusZoneKey, tourStop]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -473,6 +487,52 @@ export default function AquaticCenterScene({
     controls.addEventListener("start", () => {
       transition = null;
     });
+
+    // ---- Guided tour state (Klapty-style viewpoint flights + look-around) ----
+    let tourActive = false;
+    let appliedTourKey: string | null = null;
+    const tourLook = { yaw: 0, pitch: 0 };
+    let tourFlight: {
+      fromPos: THREE.Vector3;
+      toPos: THREE.Vector3;
+      fromYaw: number;
+      toYaw: number;
+      fromPitch: number;
+      toPitch: number;
+      start: number;
+      duration: number;
+      exit: boolean;
+    } | null = null;
+
+    /** Yaw/pitch (order YXZ) that makes a camera at `pos` face `lookAt`. */
+    const poseToward = (pos: THREE.Vector3, lookAt: THREE.Vector3) => {
+      const dir = lookAt.clone().sub(pos).normalize();
+      return {
+        yaw: Math.atan2(-dir.x, -dir.z),
+        pitch: Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)),
+      };
+    };
+
+    /** Shortest-path angle interpolation so the camera never spins the long way. */
+    const lerpAngle = (from: number, to: number, t: number) => {
+      const delta = ((to - from + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      return from + delta * t;
+    };
+
+    const startTourFlight = (toPos: THREE.Vector3, toYaw: number, toPitch: number, exit: boolean) => {
+      camera.rotation.order = "YXZ";
+      tourFlight = {
+        fromPos: camera.position.clone(),
+        toPos,
+        fromYaw: camera.rotation.y,
+        toYaw,
+        fromPitch: camera.rotation.x,
+        toPitch,
+        start: performance.now(),
+        duration: exit ? 1100 : 1500,
+        exit,
+      };
+    };
 
     // ---- Illumination ----
     scene.add(new THREE.AmbientLight(0xffffff, 0.9));
@@ -857,16 +917,34 @@ export default function AquaticCenterScene({
     };
 
     let pointerOrigin: { x: number; y: number } | null = null;
+    let lookDrag: { x: number; y: number } | null = null;
     const onPointerDown = (e: PointerEvent) => {
       pointerOrigin = { x: e.clientX, y: e.clientY };
+      if (tourActive) lookDrag = { x: e.clientX, y: e.clientY };
     };
     const onPointerUp = (e: PointerEvent) => {
+      lookDrag = null;
       if (!pointerOrigin) return;
+      if (tourActive) return; // tour mode: dragging looks around, no zone picking
       if (Math.hypot(e.clientX - pointerOrigin.x, e.clientY - pointerOrigin.y) > 4) return;
       const zoneKey = queryZoneHit(e.clientX, e.clientY);
       if (zoneKey && stateRef.current.onPickZone) stateRef.current.onPickZone(zoneKey);
     };
     const onPointerMove = (e: PointerEvent) => {
+      if (tourActive) {
+        // First-person look-around from the current viewpoint.
+        if (lookDrag && e.buttons > 0 && !tourFlight) {
+          tourLook.yaw += (e.clientX - lookDrag.x) * 0.0042;
+          tourLook.pitch = THREE.MathUtils.clamp(
+            tourLook.pitch + (e.clientY - lookDrag.y) * 0.0042,
+            -1.25,
+            1.25,
+          );
+          lookDrag = { x: e.clientX, y: e.clientY };
+        }
+        renderer.domElement.style.cursor = lookDrag ? "grabbing" : "grab";
+        return;
+      }
       const zoneKey = queryZoneHit(e.clientX, e.clientY);
       renderer.domElement.style.cursor = zoneKey ? "pointer" : "grab";
       if (stateRef.current.onHoverZone) stateRef.current.onHoverZone(zoneKey);
@@ -894,29 +972,78 @@ export default function AquaticCenterScene({
         meshMat.opacity = THREE.MathUtils.lerp(meshMat.opacity, isHovered ? 0.96 : 0.9, 0.16);
       }
 
-      if (targetFocusKey !== appliedFocusKey) {
-        appliedFocusKey = targetFocusKey;
-        const focusedZone = zones.find((z) => z.key === targetFocusKey);
-        const destinationPos = focusedZone ? new THREE.Vector3(focusedZone.x, 7.0, focusedZone.z + 5.5) : DEFAULT_CAM_POS.clone();
-        const destinationLookAt = focusedZone ? new THREE.Vector3(focusedZone.x, 0, focusedZone.z) : DEFAULT_TARGET.clone();
-        transition = {
-          from: camera.position.clone(),
-          fromTarget: controls.target.clone(),
-          to: destinationPos,
-          toTarget: destinationLookAt,
-          start: performance.now(),
-          duration: 500,
-        };
-      }
-      if (transition) {
-        const progress = Math.min(1, (performance.now() - transition.start) / transition.duration);
-        const smoothFactor = progress * (2 - progress);
-        camera.position.lerpVectors(transition.from, transition.to, smoothFactor);
-        controls.target.lerpVectors(transition.fromTarget, transition.toTarget, smoothFactor);
-        if (progress === 1) transition = null;
+      // ---- guided tour: viewpoint changes ----
+      const currentTourStop = stateRef.current.tourStop ?? null;
+      const currentTourKey = currentTourStop?.key ?? null;
+      if (currentTourKey !== appliedTourKey) {
+        appliedTourKey = currentTourKey;
+        if (currentTourStop) {
+          // Enter (or hop to the next stop): pause orbit, fly the camera in.
+          tourActive = true;
+          controls.enabled = false;
+          transition = null;
+          const toPos = new THREE.Vector3(...currentTourStop.position);
+          const pose = poseToward(toPos, new THREE.Vector3(...currentTourStop.lookAt));
+          startTourFlight(toPos, pose.yaw, pose.pitch, false);
+        } else if (tourActive) {
+          // Exit: fly back to the overview pose, then hand orbit back.
+          tourActive = false;
+          const pose = poseToward(DEFAULT_CAM_POS, DEFAULT_TARGET);
+          startTourFlight(DEFAULT_CAM_POS.clone(), pose.yaw, pose.pitch, true);
+        }
       }
 
-      controls.update();
+      if (tourFlight) {
+        const p = Math.min(1, (performance.now() - tourFlight.start) / tourFlight.duration);
+        const s = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2; // ease-in-out
+        camera.position.lerpVectors(tourFlight.fromPos, tourFlight.toPos, s);
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = lerpAngle(tourFlight.fromYaw, tourFlight.toYaw, s);
+        camera.rotation.x = THREE.MathUtils.lerp(tourFlight.fromPitch, tourFlight.toPitch, s);
+        camera.rotation.z = 0;
+        if (p === 1) {
+          tourLook.yaw = tourFlight.toYaw;
+          tourLook.pitch = tourFlight.toPitch;
+          const wasExit = tourFlight.exit;
+          tourFlight = null;
+          if (wasExit) {
+            controls.enabled = true;
+            controls.target.copy(DEFAULT_TARGET);
+            controls.update();
+          }
+        }
+      } else if (tourActive) {
+        // Hold the viewpoint; drag-to-look drives yaw/pitch.
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = tourLook.yaw;
+        camera.rotation.x = tourLook.pitch;
+        camera.rotation.z = 0;
+      } else {
+        // ---- normal overview mode: zone-focus transitions + orbit ----
+        if (targetFocusKey !== appliedFocusKey) {
+          appliedFocusKey = targetFocusKey;
+          const focusedZone = zones.find((z) => z.key === targetFocusKey);
+          const destinationPos = focusedZone ? new THREE.Vector3(focusedZone.x, 7.0, focusedZone.z + 5.5) : DEFAULT_CAM_POS.clone();
+          const destinationLookAt = focusedZone ? new THREE.Vector3(focusedZone.x, 0, focusedZone.z) : DEFAULT_TARGET.clone();
+          transition = {
+            from: camera.position.clone(),
+            fromTarget: controls.target.clone(),
+            to: destinationPos,
+            toTarget: destinationLookAt,
+            start: performance.now(),
+            duration: 500,
+          };
+        }
+        if (transition) {
+          const progress = Math.min(1, (performance.now() - transition.start) / transition.duration);
+          const smoothFactor = progress * (2 - progress);
+          camera.position.lerpVectors(transition.from, transition.to, smoothFactor);
+          controls.target.lerpVectors(transition.fromTarget, transition.toTarget, smoothFactor);
+          if (progress === 1) transition = null;
+        }
+        controls.update();
+      }
+
       renderer.render(scene, camera);
     };
     executeFrameTick();
