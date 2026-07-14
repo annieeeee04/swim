@@ -17,6 +17,10 @@ public record UserView(
         String avatarSuit,
         String avatarCap,
         String avatarBase,
+        String avatarBodyShape,
+        String avatarHairStyle,
+        String avatarHairColor,
+        String avatarSuitStyle,
         String photoUrl) {
 
     public static UserView from(User u) {
@@ -31,6 +35,10 @@ public record UserView(
                 u.getAvatarSuit(),
                 u.getAvatarCap(),
                 u.getAvatarBase(),
+                u.getAvatarBodyShape(),
+                u.getAvatarHairStyle(),
+                u.getAvatarHairColor(),
+                u.getAvatarSuitStyle(),
                 u.getPhotoUrl());
     }
 }

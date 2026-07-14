@@ -67,6 +67,22 @@ public class User {
     @Column
     private String avatarBase;
 
+    /** Body silhouette: "lean", "athletic", or "strong". */
+    @Column
+    private String avatarBodyShape;
+
+    /** Hair style: "buzz", "short", "wavy", "long", "bun", or "ponytail". */
+    @Column
+    private String avatarHairStyle;
+
+    /** Hair color as a hex string chosen by the user. */
+    @Column
+    private String avatarHairColor;
+
+    /** Swimsuit cut: "classic", "racer", "shorts", or "rash". */
+    @Column
+    private String avatarSuitStyle;
+
     /** Uploaded profile photo as a data URL. Used ONLY for records/leaderboard,
      *  never as the in-pool swimmer. Stored as a CLOB so base64 fits. */
     @Lob
@@ -173,6 +189,38 @@ public class User {
 
     public void setAvatarBase(String avatarBase) {
         this.avatarBase = avatarBase;
+    }
+
+    public String getAvatarBodyShape() {
+        return avatarBodyShape;
+    }
+
+    public void setAvatarBodyShape(String avatarBodyShape) {
+        this.avatarBodyShape = avatarBodyShape;
+    }
+
+    public String getAvatarHairStyle() {
+        return avatarHairStyle;
+    }
+
+    public void setAvatarHairStyle(String avatarHairStyle) {
+        this.avatarHairStyle = avatarHairStyle;
+    }
+
+    public String getAvatarHairColor() {
+        return avatarHairColor;
+    }
+
+    public void setAvatarHairColor(String avatarHairColor) {
+        this.avatarHairColor = avatarHairColor;
+    }
+
+    public String getAvatarSuitStyle() {
+        return avatarSuitStyle;
+    }
+
+    public void setAvatarSuitStyle(String avatarSuitStyle) {
+        this.avatarSuitStyle = avatarSuitStyle;
     }
 
     public String getPhotoUrl() {

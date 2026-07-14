@@ -1,7 +1,7 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { PoolFilter, SwimEvent } from "../types";
 import { buildZoneSchedule, dayKeyOf, isFiftyMeter, listDays } from "../utils/poolZones";
-import type { ZoneLayout } from "./AquaticCenterScene";
+import type { TourCamera, ZoneLayout } from "./AquaticCenterScene";
 import { formatDayHeading, formatTime } from "../utils/time";
 import DayCalendarPicker from "./DayCalendarPicker";
 
@@ -9,6 +9,60 @@ import DayCalendarPicker from "./DayCalendarPicker";
 const AquaticCenterScene = lazy(() => import("./AquaticCenterScene"));
 
 const INLINE_PREVIEW = 2;
+
+/** The official Klapty 360° photo tour of the UBC Aquatic Centre. */
+const KLAPTY_TOUR_URL = "https://tour.klapty.com/hrK0IMVEyT";
+
+/** Guided-tour stops through the 3D facility, Klapty-style. */
+interface TourStop extends TourCamera {
+  title: string;
+  text: string;
+}
+
+const TOUR_STOPS: TourStop[] = [
+  {
+    key: "welcome",
+    title: "Welcome to the Aquatic Centre",
+    text: "Standing at the entrance. Drag to look around — the whole natatorium is ahead of you.",
+    position: [-7.4, 1.7, 3.9],
+    lookAt: [0.5, 0.3, -0.5],
+  },
+  {
+    key: "recreation",
+    title: "Recreation Pool · 25m",
+    text: "Eight lanes, 4.5m deep end with the diving tower. Most 25m Length Swim sessions happen here.",
+    position: [-4.0, 1.6, 0.6],
+    lookAt: [-4.0, 0.1, -2.4],
+  },
+  {
+    key: "leisure",
+    title: "Leisure Pool",
+    text: "Warm water, fountains, basketball hoops and the kids' play island — plus the warm corner pool.",
+    position: [-1.6, 1.6, 3.8],
+    lookAt: [-4.4, 0.1, 1.5],
+  },
+  {
+    key: "hot-tub",
+    title: "Hot Tub",
+    text: "The warm-down corner between the pools. Ledge seats, jets, and the aquatic lift for accessibility.",
+    position: [-2.6, 1.4, 2.2],
+    lookAt: [-1.6, 0.15, 0.3],
+  },
+  {
+    key: "competition",
+    title: "Competition Pool · 50m",
+    text: "The Olympic-size pool with starting blocks and 10 lanes. 50m Length Swim lives here.",
+    position: [-1.3, 1.7, 2.8],
+    lookAt: [2.2, 0.1, -0.4],
+  },
+  {
+    key: "stands",
+    title: "Spectator View",
+    text: "The mezzanine perspective — on meet days up to 460 spectators watch from up here.",
+    position: [1.6, 4.6, 4.3],
+    lookAt: [1.2, 0, -0.8],
+  },
+];
 
 function poolEmoji(facilityName: string | null | undefined): string {
   const name = (facilityName ?? "").toLowerCase();
@@ -44,6 +98,25 @@ export default function AquaticCenterSchedule({
   const [activeZoneKey, setActiveZoneKey] = useState<string | null>(null);
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+
+  // Guided 3D tour (null = off) + embedded Klapty 360° photo tour.
+  const [tourIndex, setTourIndex] = useState<number | null>(null);
+  const [photoTourOpen, setPhotoTourOpen] = useState(false);
+  const touring = tourIndex !== null;
+  const tourStop = touring ? TOUR_STOPS[tourIndex] : null;
+
+  // Keyboard navigation while touring: ← → to move, Esc to exit.
+  useEffect(() => {
+    if (!touring) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTourIndex(null);
+      else if (e.key === "ArrowRight")
+        setTourIndex((i) => (i === null ? null : Math.min(i + 1, TOUR_STOPS.length - 1)));
+      else if (e.key === "ArrowLeft") setTourIndex((i) => (i === null ? null : Math.max(i - 1, 0)));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [touring]);
 
   const dayEvents = useMemo(
     () => applyPoolFilter(events.filter((ev) => dayKeyOf(ev.start) === activeDay), filter),
@@ -100,25 +173,101 @@ export default function AquaticCenterSchedule({
                   focusZoneKey={selectedZoneKey}
                   onPickZone={(key) => setSelectedZoneKey(key)}
                   onHoverZone={(key) => setActiveZoneKey(key)}
+                  tourStop={tourStop}
                 />
               </Suspense>
             </div>
 
-            <span className="stage-hint glass-surface" data-glass>
-              🎮 WASD / arrows to walk · Enter to open a pool
-            </span>
+            {/* virtual-tour entry points */}
+            <div className="tour-buttons">
+              {!touring && (
+                <button
+                  type="button"
+                  className="tour-btn glass-surface"
+                  data-glass
+                  onClick={() => {
+                    setSelectedZoneKey(null);
+                    setSessionsOpen(false);
+                    setTourIndex(0);
+                  }}
+                >
+                  🎬 3D Tour
+                </button>
+              )}
+              <button
+                type="button"
+                className="tour-btn glass-surface"
+                data-glass
+                onClick={() => setPhotoTourOpen(true)}
+              >
+                📷 Photo Tour
+              </button>
+            </div>
 
-            <button
-              type="button"
-              className="sessions-toggle glass-surface"
-              data-glass
-              onClick={() => setSessionsOpen((v) => !v)}
-              aria-expanded={sessionsOpen}
-            >
-              🏊 Pool Sessions
-              {dayEvents.length > 0 && <span className="sessions-toggle-count">{dayEvents.length}</span>}
-              <span className={`sessions-toggle-chevron ${sessionsOpen ? "is-open" : ""}`}>▾</span>
-            </button>
+            {!touring && (
+              <span className="stage-hint glass-surface" data-glass>
+                🎮 WASD / arrows to walk · Enter to open a pool
+              </span>
+            )}
+
+            {/* guided-tour card: title, story, stop dots, prev/next */}
+            {touring && tourStop && (
+              <div className="tour-card glass-surface" data-glass>
+                <div className="tour-card-top">
+                  <div>
+                    <h4>{tourStop.title}</h4>
+                    <p>{tourStop.text}</p>
+                  </div>
+                  <button className="tour-exit" onClick={() => setTourIndex(null)} aria-label="Exit tour">
+                    ✕
+                  </button>
+                </div>
+                <div className="tour-card-nav">
+                  <button
+                    className="tour-arrow"
+                    disabled={tourIndex === 0}
+                    onClick={() => setTourIndex((i) => Math.max(0, (i ?? 0) - 1))}
+                    aria-label="Previous stop"
+                  >
+                    ‹
+                  </button>
+                  <div className="tour-dots" role="tablist">
+                    {TOUR_STOPS.map((s, i) => (
+                      <button
+                        key={s.key}
+                        className={`tour-dot ${i === tourIndex ? "active" : ""}`}
+                        onClick={() => setTourIndex(i)}
+                        aria-label={s.title}
+                        title={s.title}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    className="tour-arrow"
+                    disabled={tourIndex === TOUR_STOPS.length - 1}
+                    onClick={() => setTourIndex((i) => Math.min(TOUR_STOPS.length - 1, (i ?? 0) + 1))}
+                    aria-label="Next stop"
+                  >
+                    ›
+                  </button>
+                </div>
+                <span className="tour-hint">Drag to look around · ← → to move · Esc to exit</span>
+              </div>
+            )}
+
+            {!touring && (
+              <button
+                type="button"
+                className="sessions-toggle glass-surface"
+                data-glass
+                onClick={() => setSessionsOpen((v) => !v)}
+                aria-expanded={sessionsOpen}
+              >
+                🏊 Pool Sessions
+                {dayEvents.length > 0 && <span className="sessions-toggle-count">{dayEvents.length}</span>}
+                <span className={`sessions-toggle-chevron ${sessionsOpen ? "is-open" : ""}`}>▾</span>
+              </button>
+            )}
 
             {sessionsOpen && (
               <>
@@ -220,6 +369,37 @@ export default function AquaticCenterSchedule({
             )}
           </aside>
         </>
+      )}
+
+      {/* ---- embedded Klapty 360° photo tour of the real facility ---- */}
+      {photoTourOpen && (
+        <div className="photo-tour-backdrop" onClick={() => setPhotoTourOpen(false)}>
+          <div className="photo-tour-shell" onClick={(e) => e.stopPropagation()}>
+            <header className="photo-tour-head">
+              <h4>UBC Aquatic Centre · 360° Photo Tour</h4>
+              <button
+                className="tour-exit"
+                onClick={() => setPhotoTourOpen(false)}
+                aria-label="Close photo tour"
+              >
+                ✕
+              </button>
+            </header>
+            <iframe
+              className="photo-tour-frame"
+              src={KLAPTY_TOUR_URL}
+              title="UBC Aquatic Centre 360° virtual tour"
+              allow="fullscreen; gyroscope; accelerometer"
+              allowFullScreen
+            />
+            <span className="photo-tour-credit">
+              360° photography hosted on{" "}
+              <a href="https://www.klapty.com/tour/hrK0IMVEyT" target="_blank" rel="noopener noreferrer">
+                Klapty
+              </a>
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );

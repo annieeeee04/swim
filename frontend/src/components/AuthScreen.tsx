@@ -64,6 +64,10 @@ export default function AuthScreen() {
         avatarSuit: look.suit,
         avatarCap: look.cap,
         avatarBase: look.base,
+        avatarBodyShape: look.bodyShape,
+        avatarHairStyle: look.hairStyle,
+        avatarHairColor: look.hairColor,
+        avatarSuitStyle: look.suitStyle,
       });
       // Photo is uploaded after the account exists (records/leaderboard only).
       if (photo) {
