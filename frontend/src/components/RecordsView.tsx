@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import SwimmerAvatar from "./SwimmerAvatar";
 import SwimSchool from "./SwimSchool";
 import type { SwimRecord, User } from "../types";
+import type { BodyShape, HairStyle, SuitStyle } from "../utils/generateAvatar";
 
 function characterFor(id: string) {
   return CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
@@ -108,10 +109,10 @@ function RecordCard({
           character={character}
           pose="stand"
           size={40}
-          bodyShape={(user?.avatarBodyShape as any) ?? "athletic"}
-          hairStyle={(user?.avatarHairStyle as any) ?? "short"}
+          bodyShape={(user?.avatarBodyShape as BodyShape | null) ?? "athletic"}
+          hairStyle={(user?.avatarHairStyle as HairStyle | null) ?? "short"}
           hairColor={user?.avatarHairColor ?? undefined}
-          suitStyle={(user?.avatarSuitStyle as any) ?? "classic"}
+          suitStyle={(user?.avatarSuitStyle as SuitStyle | null) ?? "classic"}
         />
         <span className={`record-status ${done ? "record-status-done" : "record-status-live"}`}>
           {done ? "Completed" : "In Progress"}
