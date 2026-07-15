@@ -111,6 +111,15 @@ export async function finishSwim(id: number, distanceMeters: number): Promise<Sw
   return res.json();
 }
 
+/** Deletes a swim record entirely (any status). */
+export async function deleteSwimRecord(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/swim-records/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failure(res, "Couldn't delete that record.");
+}
+
 export async function fetchSwimHistory(): Promise<SwimRecord[]> {
   const res = await fetch(`${API_BASE}/api/swim-records`, { headers: authHeaders() });
   if (!res.ok) {
