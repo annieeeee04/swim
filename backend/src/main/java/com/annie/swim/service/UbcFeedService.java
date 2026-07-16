@@ -17,11 +17,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -96,41 +94,24 @@ public class UbcFeedService {
             }
 
             LocalDate today = LocalDate.now(VANCOUVER);
-            List<CompletableFuture<List<SwimEvent>>> futures = new ArrayList<>();
-            for (int offset = 0; offset < 7; offset++) {
-                LocalDate start = today.plusDays(offset);
-                LocalDate end = today.plusDays(offset + 1L);
-                futures.add(fetchDayAsync(start, end));
-            }
+            // Fetch the full 7-day window in a single call to avoid any day-boundary
+            // issues that can occur when fetching day-by-day (e.g. the pm-feed treating
+            // the start/end parameters as UTC vs. Pacific, causing today's sessions to
+            // fall outside the requested window).
+            List<SwimEvent> raw = fetchRange(today, today.plusDays(7));
 
-            Map<String, SwimEvent> merged = new LinkedHashMap<>();
-            int successCount = 0;
-            for (CompletableFuture<List<SwimEvent>> future : futures) {
-                try {
-                    List<SwimEvent> dayEvents = future.get();
-                    successCount++;
-                    for (SwimEvent ev : dayEvents) {
-                        if (isTargetSession(ev)) {
-                            merged.put(ev.getEventId(), ev);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to fetch a day of the UBC feed: {}", e.getMessage());
+            List<SwimEvent> filtered = new ArrayList<>();
+            for (SwimEvent ev : raw) {
+                if (isTargetSession(ev)) {
+                    filtered.add(ev);
                 }
             }
+            filtered.sort((a, b) -> a.getStart().compareTo(b.getStart()));
 
-            if (successCount == 0) {
-                log.error("All 7 day-fetches from the UBC feed failed; keeping previous cache.");
-                return;
-            }
-
-            List<SwimEvent> sorted = new ArrayList<>(merged.values());
-            sorted.sort((a, b) -> a.getStart().compareTo(b.getStart()));
-
-            cachedEvents = List.copyOf(sorted);
+            cachedEvents = List.copyOf(filtered);
             cachedAt = Instant.now();
-            log.info("Refreshed UBC schedule cache: {} sessions ({}/{} days fetched).",
-                    cachedEvents.size(), successCount, futures.size());
+            log.info("Refreshed UBC schedule cache: {} sessions (7-day window from {}).",
+                    cachedEvents.size(), today);
         } finally {
             refreshLock.unlock();
         }
@@ -140,7 +121,13 @@ public class UbcFeedService {
         return ev.getServiceName() != null && TARGET_SERVICES.contains(ev.getServiceName().trim().toLowerCase());
     }
 
-    private CompletableFuture<List<SwimEvent>> fetchDayAsync(LocalDate start, LocalDate end) {
+    /**
+     * Fetches all events from the UBC pm-feed for the given date range in a single
+     * HTTP request. Both {@code start} and {@code end} are expressed as Vancouver
+     * local midnight so the feed receives a clean Pacific-time window regardless of
+     * the server's own system timezone.
+     */
+    private List<SwimEvent> fetchRange(LocalDate start, LocalDate end) {
         String startStr = start.atStartOfDay().format(REQUEST_FORMAT).replace(":", "%3A");
         String endStr = end.atStartOfDay().format(REQUEST_FORMAT).replace(":", "%3A");
 
@@ -148,23 +135,26 @@ public class UbcFeedService {
                 + "&services=Null&ecolor=%23DD732D&closuresonly=N&teams&exclude&keywords&facilitytype"
                 + "&start=" + startStr + "&end=" + endStr;
 
+        log.debug("Fetching UBC feed: {}", url);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(15))
+                .timeout(Duration.ofSeconds(20))
                 .GET()
                 .build();
 
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(response -> {
-                    if (response.statusCode() / 100 != 2) {
-                        throw new RuntimeException("UBC feed returned HTTP " + response.statusCode());
-                    }
-                    try {
-                        return objectMapper.readValue(response.body(), SwimEvent[].class);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to parse UBC feed JSON: " + e.getMessage(), e);
-                    }
-                })
-                .thenApply(List::of);
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() / 100 != 2) {
+                log.error("UBC feed returned HTTP {} for range {}-{}", response.statusCode(), start, end);
+                return List.of();
+            }
+            SwimEvent[] events = objectMapper.readValue(response.body(), SwimEvent[].class);
+            log.info("UBC feed returned {} raw events for {}-{}", events.length, start, end);
+            return Arrays.asList(events);
+        } catch (Exception e) {
+            log.error("Failed to fetch UBC feed for range {}-{}: {}", start, end, e.getMessage());
+            return List.of();
+        }
     }
 }
